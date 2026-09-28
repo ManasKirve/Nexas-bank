@@ -104,6 +104,15 @@ because it documents the production architecture this demo imitates: layered
 monolith, JPA entities, bean validation, audit hooks, the authoritative fraud
 engine, and the REST contracts the Angular services still mirror.
 
+Its JWT security stack (`JwtService`, `JwtAuthenticationFilter`,
+`DbUserDetailsService`, `AuthController`) is deliberately left in place, because
+stateless JWT + RBAC is part of what the reference is meant to teach. That is
+also why the demo never starts it: starting that build independently still
+requires its own `JWT_SECRET` and PostgreSQL, and will fail with
+`JWT secret is not configured` until you provide them. **That message cannot
+appear in local demo mode, because the demo does not start the backend at all.**
+Nothing in `frontend/` imports, calls, or requires the backend.
+
 ```powershell
 # Only if you want to explore the reference implementation
 cd nexa-bank
