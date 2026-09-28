@@ -1,0 +1,75 @@
+# NexaBank local infrastructure: PostgreSQL (authoritative) + Redis
+# (cache/rate-limit, non-authoritative) + Kafka (domain-event feed,
+# non-authoritative). The Spring Boot app and Angular run locally, not here.
+#
+# Start:  docker compose up -d
+# Check:  docker compose ps
+# Logs:   docker compose logs -f kafka
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: nexabank-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nexabank}
+      POSTGRES_USER: ${POSTGRES_USER:-nexabank}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexabank}
+    ports:
+      - "5432:5432"
+    volumes:
+      - nexabank-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-nexabank} -d $${POSTGRES_DB:-nexabank}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: nexabank-redis
+    restart: unless-stopped
+    # Optional password: set REDIS_PASSWORD to require it. Empty = open local dev.
+    command: ["sh", "-c", "if [ -n \"$REDIS_PASSWORD\" ]; then exec redis-server --requirepass \"$REDIS_PASSWORD\"; else exec redis-server; fi"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    ports:
+      - "6379:6379"
+    volumes:
+      - nexabank-redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: nexabank-kafka
+    restart: unless-stopped
+    environment:
+      NODE_ID: 1
+      CLUSTER_ID: nexabank-kafka-cluster-01
+      PROCESS_ROLES: broker,controller
+      LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      CONTROLLER_LISTENER_NAMES: CONTROLLER
+      LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_HEAP_OPTS: "-Xmx512M -Xms512M"
+    ports:
+      - "9092:9092"
+    volumes:
+      - nexabank-kafkadata:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "cub kafka-ready -b localhost:9092 1 20 || /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 20s
+      timeout: 15s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  nexabank-pgdata:
+  nexabank-redisdata:
+  nexabank-kafkadata:

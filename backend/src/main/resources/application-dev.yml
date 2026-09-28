@@ -1,0 +1,42 @@
+# Development profile: `SPRING_PROFILES_ACTIVE=dev` or --spring.profiles.active=dev
+spring:
+  jpa:
+    show-sql: true
+    hibernate:
+      # Phase 2: dev auto-creates the customer/account tables for local work.
+      # Production stays on validate — schema changes there require migrations.
+      ddl-auto: update
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+  flyway:
+    enabled: false
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.nexabank: DEBUG
+    org.hibernate.SQL: DEBUG
+  pattern:
+    # correlationId in every line via MDC (set by CorrelationIdFilter).
+    console: "%d{yyyy-MM-dd HH:mm:ss} %-5level [%thread] [%X{correlationId}] %logger{36} - %msg%n"
+
+app:
+  redis:
+    # Local compose provides Redis; the app still boots without it
+    # (cache/rate-limit degrade gracefully to in-memory + fail-open).
+    enabled: ${APP_REDIS_ENABLED:true}
+  kafka:
+    # Local compose provides Kafka; the broker being down only leaves
+    # outbox rows PENDING — money movement is unaffected.
+    enabled: ${APP_KAFKA_ENABLED:true}
+
+  jwt:
+    # DEVELOPMENT ONLY — insecure default so `SPRING_PROFILES_ACTIVE=dev`
+    # works out of the box. Never use this value outside local development;
+    # set JWT_SECRET in any shared or production-like environment.
+    secret: ${JWT_SECRET:dev-only-insecure-secret-please-change-me-1234567890}

@@ -1,0 +1,54 @@
+<div class="shell" [class.collapsed]="!sidebarOpen()">
+  <aside class="sidebar" aria-label="Primary">
+    <div class="brand">
+      <span class="brand-mark">N</span>
+      @if (sidebarOpen()) {
+        <span class="brand-name">{{ appName() }}</span>
+      }
+    </div>
+      <nav class="nav">
+        @for (item of nav; track item.path) {
+        <a
+          [routerLink]="item.path"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: false }"
+          class="nav-link"
+        >
+          <span class="dot" aria-hidden="true"></span>
+          @if (sidebarOpen()) {
+            <span>{{ item.label }}</span>
+          }
+        </a>
+      }
+    </nav>
+    <div class="side-foot">
+      @if (sidebarOpen()) {
+        <span class="muted">Local demo · LocalStorage</span>
+      }
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button type="button" class="icon-btn" (click)="toggleSidebar()" aria-label="Toggle sidebar">☰</button>
+      <div class="top-title">
+        <strong>{{ appName() }}</strong>
+        <span class="muted">Enterprise Digital Banking &amp; Fraud Monitoring</span>
+      </div>
+      <div class="top-actions">
+        <a routerLink="/admin" class="muted user-chip" title="Change the demo customer in Admin">
+          Acting as {{ actingCustomer() }}
+        </a>
+        <a routerLink="/admin" class="btn ghost">Demo settings</a>
+      </div>
+    </header>
+
+    <main class="content">
+      <router-outlet />
+    </main>
+
+    <footer class="footer">
+      <span>© {{ year() }} {{ appName() }} — educational portfolio build. No real banking data.</span>
+    </footer>
+  </div>
+</div>

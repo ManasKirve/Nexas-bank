@@ -1,0 +1,56 @@
+# Test profile — H2 in-memory DB so `mvn test` needs no live PostgreSQL.
+spring:
+  datasource:
+    url: jdbc:h2:mem:nexabank_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  autoconfigure:
+    exclude: []
+  flyway:
+    # Entity create-drop owns the test schema; migrations are validated
+    # separately by FlywayMigrationTest on a scratch H2 database.
+    enabled: false
+
+app:
+  jwt:
+    # TEST ONLY — dummy secret, never used outside `mvn test`.
+    secret: test-only-insecure-secret-for-automated-tests-1234567890
+    expiration-ms: 3600000
+  redis:
+    enabled: false
+  kafka:
+    enabled: false
+  rate-limit:
+    # Dedicated RateLimitTest enables limits with its own context properties.
+    enabled: false
+  outbox:
+    # Publisher scheduling off in tests; OutboxPublisherTest drives it directly.
+    publisher-enabled: false
+
+fraud:
+  evaluation-version: v1
+  review-threshold: 30
+  block-threshold: 60
+  rules:
+    large-transaction-threshold: 50000
+    large-transaction-score: 25
+    high-frequency-count: 5
+    high-frequency-window-minutes: 10
+    high-frequency-score: 20
+    rapid-withdrawal-count: 3
+    rapid-withdrawal-window-minutes: 10
+    rapid-withdrawal-score: 20
+    rapid-transfer-count: 3
+    rapid-transfer-window-minutes: 10
+    rapid-transfer-score: 20
+    new-beneficiary-window-hours: 24
+    new-beneficiary-score: 15
+    activity-spike-score: 20
+    activity-spike-multiplier: 2.0
+    activity-spike-min-history: 3
+    activity-spike-lookback: 10

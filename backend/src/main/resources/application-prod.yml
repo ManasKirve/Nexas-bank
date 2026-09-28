@@ -1,0 +1,45 @@
+# Production profile: `SPRING_PROFILES_ACTIVE=prod`.
+# All secrets MUST come from the environment / secret manager.
+spring:
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    # Production schema is migration-managed (docs/database-migrations.md).
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+
+management:
+  endpoint:
+    health:
+      show-details: never
+  endpoints:
+    web:
+      exposure:
+        # No prometheus/metrics detail publicly; scrape behind the platform.
+        include: health,info
+
+logging:
+  level:
+    com.nexabank: INFO
+    org.hibernate: WARN
+  pattern:
+    # Structured-ish console: timestamp, level, correlation, logger, message.
+    # Never log secrets, tokens or password material (enforced in code).
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{correlationId}] %logger{36} - %msg%n"
+
+app:
+  redis:
+    enabled: ${APP_REDIS_ENABLED:true}
+  kafka:
+    enabled: ${APP_KAFKA_ENABLED:true}
+
+springdoc:
+  # Descriptors stay available in dev; production serves no API docs.
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

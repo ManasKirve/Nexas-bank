@@ -1,0 +1,152 @@
+# NexaBank backend — base configuration (active when no profile is set).
+# Sensitive values come from environment variables. Never hardcode real passwords.
+
+spring:
+  application:
+    name: nexabank-backend
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/nexabank}
+    username: ${DATABASE_USERNAME:nexabank}
+    password: ${DATABASE_PASSWORD:nexabank}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      # Bounded waits: fail fast instead of hanging requests.
+      connection-timeout: 10000
+      validation-timeout: 5000
+      max-lifetime: 1800000
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        # Bounded query waits (Jakarta persistence timeouts, ms).
+        jakarta.persistence.query.timeout: 10000
+        jakarta.persistence.lock.timeout: 5000
+  flyway:
+    # Production owns the schema via migrations (see application-prod.yml).
+    # Base/dev keep Flyway off and rely on ddl-auto (dev: update).
+    enabled: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      connect-timeout: 2s
+      timeout: 2s
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      retries: 5
+      request-timeout-ms: 30000
+      delivery-timeout-ms: 120000
+      acks: all
+    consumer:
+      group-id: nexabank-analytics
+      auto-offset-reset: earliest
+      enable-auto-commit: true
+      max-poll-records: 50
+      session-timeout-ms: 10000
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: NexaBank Backend
+    description: Enterprise Digital Banking & Fraud Monitoring Platform
+    version: 0.1.0-SNAPSHOT
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+  show-actuator: false
+
+app:
+  redis:
+    enabled: ${APP_REDIS_ENABLED:false}
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+  kafka:
+    enabled: ${APP_KAFKA_ENABLED:false}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  rate-limit:
+    enabled: ${APP_RATE_LIMIT_ENABLED:true}
+    default-max-requests: 200
+    default-window: 1m
+    rules:
+      - path-prefix: /api/v1/auth/login
+        max-requests: 20
+        window: 1m
+      - path-prefix: /api/v1/auth/register
+        max-requests: 20
+        window: 1m
+      - path-prefix: /api/v1/accounts
+        max-requests: 120
+        window: 1m
+      - path-prefix: /api/v1/transfers
+        max-requests: 60
+        window: 1m
+      - path-prefix: /api/v1/fraud
+        max-requests: 120
+        window: 1m
+  outbox:
+    publisher-enabled: ${APP_OUTBOX_PUBLISHER_ENABLED:true}
+    batch-size: 50
+    max-retries: 20
+    poll-delay: 5s
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
+  jwt:
+    # Production secret MUST come from the JWT_SECRET environment variable.
+    # No default is provided here on purpose — the app fails fast at startup
+    # when it is missing (see JwtService). Dev/test profiles supply their
+    # own clearly-marked non-production defaults.
+    secret: ${JWT_SECRET:}
+    expiration-ms: ${JWT_EXPIRATION_MS:3600000}
+
+# Phase 6 — deterministic, explainable fraud risk engine (educational thresholds,
+# NOT production banking standards). All rule thresholds/scores centralized here.
+fraud:
+  evaluation-version: v1
+  review-threshold: 30
+  block-threshold: 60
+  rules:
+    large-transaction-threshold: 50000
+    large-transaction-score: 25
+    high-frequency-count: 5
+    high-frequency-window-minutes: 10
+    high-frequency-score: 20
+    rapid-withdrawal-count: 3
+    rapid-withdrawal-window-minutes: 10
+    rapid-withdrawal-score: 20
+    rapid-transfer-count: 3
+    rapid-transfer-window-minutes: 10
+    rapid-transfer-score: 20
+    new-beneficiary-window-hours: 24
+    new-beneficiary-score: 15
+    activity-spike-score: 20
+    activity-spike-multiplier: 2.0
+    activity-spike-min-history: 3
+    activity-spike-lookback: 10
