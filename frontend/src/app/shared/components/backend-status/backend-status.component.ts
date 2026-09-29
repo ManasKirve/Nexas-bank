@@ -33,13 +33,39 @@ import { StatusBadgeComponent } from '../status-badge/status-badge.component';
   `,
   styles: [
     `
-      .backend-status { display: flex; align-items: center; gap: 0.5rem; }
-      .label { font-weight: 600; color: #3c4043; }
-      .retry {
-        border: 1px solid #dadce0; background: #fff; border-radius: 6px;
-        padding: 0.2rem 0.6rem; cursor: pointer; font-size: 0.8rem;
+      .backend-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.3rem 0.4rem 0.3rem 0.65rem;
+        border: 1px solid var(--nx-border);
+        border-radius: 999px;
+        background: var(--nx-surface);
+        box-shadow: var(--nx-shadow-xs);
       }
-      .retry:hover { background: #f6fafe; }
+      .label {
+        font-size: 0.6875rem;
+        font-weight: 650;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--nx-muted);
+        white-space: nowrap;
+      }
+      .retry {
+        border: 1px solid var(--nx-border-2);
+        background: var(--nx-surface);
+        border-radius: 999px;
+        padding: 0.2rem 0.6rem;
+        cursor: pointer;
+        font-size: 0.6875rem;
+        font-weight: 650;
+        color: var(--nx-ink-2);
+        transition: background var(--nx-ease), color var(--nx-ease);
+      }
+      .retry:hover {
+        background: var(--nx-surface-3);
+        color: var(--nx-ink);
+      }
     `,
   ],
 })

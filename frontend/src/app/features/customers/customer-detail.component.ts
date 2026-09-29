@@ -16,21 +16,27 @@ import { readError } from './customer-create.component';
     <section class="page">
       <a routerLink="/customers" class="back">← All customers</a>
       @if (loading()) {
-        <div class="card"><p>Loading customer…</p></div>
+        <div class="card"><p class="muted">Loading customer…</p></div>
       } @else if (error()) {
-        <div class="card error"><p>{{ error() }}</p></div>
+        <div class="card error-card"><p>{{ error() }}</p></div>
       } @else if (customer()) {
         <header class="page-head">
-          <div>
-            <h1>{{ customer()!.firstName }} {{ customer()!.lastName }}</h1>
-            <p class="muted">{{ customer()!.customerNumber }} · {{ customer()!.email }}</p>
+          <div class="identity">
+            <span class="identity-avatar" aria-hidden="true">
+              {{ customer()!.firstName.slice(0, 1) }}{{ customer()!.lastName.slice(0, 1) }}
+            </span>
+            <div>
+              <h1>{{ customer()!.firstName }} {{ customer()!.lastName }}</h1>
+              <p class="muted">{{ customer()!.customerNumber }} · {{ customer()!.email }}</p>
+            </div>
           </div>
-          <app-status-badge [label]="customer()!.status" tone="info" />
+          <app-status-badge [label]="customer()!.status" [tone]="statusTone(customer()!.status)" />
         </header>
         <div class="grid">
           <div class="card">
             <h3>Details</h3>
             <dl>
+              <div><dt>Email</dt><dd>{{ customer()!.email }}</dd></div>
               <div><dt>Phone</dt><dd>{{ customer()!.phone || '—' }}</dd></div>
               <div><dt>Created</dt><dd>{{ customer()!.createdAt }}</dd></div>
               <div><dt>Updated</dt><dd>{{ customer()!.updatedAt }}</dd></div>
@@ -39,7 +45,7 @@ import { readError } from './customer-create.component';
               <p class="action" role="status">{{ actionMessage() }}</p>
             }
             @if (customer()!.status !== 'INACTIVE') {
-              <button type="button" class="btn danger" (click)="deactivate()">Deactivate customer</button>
+              <button type="button" class="btn danger-quiet" (click)="deactivate()">Deactivate customer</button>
             }
           </div>
           <div class="card">
@@ -47,19 +53,21 @@ import { readError } from './customer-create.component';
             @if (accounts().length === 0) {
               <p class="muted">No accounts yet.</p>
             } @else {
-              <table>
-                <thead><tr><th>Number</th><th>Type</th><th>Balance</th><th>Status</th></tr></thead>
-                <tbody>
-                  @for (a of accounts(); track a.id) {
-                    <tr>
-                      <td><a [routerLink]="['/accounts', a.id]">{{ a.accountNumber }}</a></td>
-                      <td>{{ a.accountType }}</td>
-                      <td>{{ a.balance }} {{ a.currency }}</td>
-                      <td><app-status-badge [label]="a.status" tone="info" /></td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+              <div class="table-scroll">
+                <table class="stackable">
+                  <thead><tr><th>Number</th><th>Type</th><th class="num">Balance</th><th>Status</th></tr></thead>
+                  <tbody>
+                    @for (a of accounts(); track a.id) {
+                      <tr>
+                        <td data-label="Number"><a [routerLink]="['/accounts', a.id]"><code>{{ a.accountNumber }}</code></a></td>
+                        <td data-label="Type" class="cell-strong">{{ a.accountType }}</td>
+                        <td class="num cell-strong" data-label="Balance">{{ a.balance }} {{ a.currency }}</td>
+                        <td data-label="Status"><app-status-badge [label]="a.status" [tone]="accountTone(a.status)" /></td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
             }
             <a [routerLink]="['/accounts/new']" [queryParams]="{ customerId: customer()!.id }" class="btn primary">
               Open account
@@ -71,21 +79,33 @@ import { readError } from './customer-create.component';
   `,
   styles: [
     `
-      .back { display: inline-block; margin-bottom: 1rem; color: #174ea6; }
-      .page-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
-      h1 { margin: 0; }
-      .muted { color: #5f6368; }
-      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
-      dl > div { display: flex; gap: 1rem; padding: 0.35rem 0; }
-      dt { font-weight: 600; min-width: 90px; color: #5f6368; }
-      dd { margin: 0; }
-      table { width: 100%; border-collapse: collapse; margin-bottom: 0.75rem; }
-      th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #e8eaed; font-size: 0.9rem; }
-      .btn { display: inline-block; text-decoration: none; padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; border: 0; cursor: pointer; }
-      .btn.primary { background: #174ea6; color: #fff; }
-      .btn.danger { background: #fff; color: #a50e0e; border: 1px solid #f5b5b0; margin-top: 0.5rem; }
-      .action { color: #137333; }
-      .error { color: #a50e0e; }
+      .identity {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        min-width: 0;
+      }
+      .identity-avatar {
+        display: grid;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
+        border-radius: 50%;
+        background: var(--nx-accent-soft);
+        color: var(--nx-accent);
+        font-size: 0.9375rem;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .action {
+        color: var(--nx-success);
+        font-size: 0.8125rem;
+        font-weight: 500;
+      }
+      .card > .btn {
+        margin-top: 1rem;
+      }
     `,
   ],
 })
@@ -138,5 +158,27 @@ export class CustomerDetailComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => this.actionMessage.set(readError(err)),
     });
+  }
+
+  statusTone(status: Customer['status']): 'success' | 'danger' | 'neutral' {
+    switch (status) {
+      case 'ACTIVE':
+        return 'success';
+      case 'BLOCKED':
+        return 'danger';
+      default:
+        return 'neutral';
+    }
+  }
+
+  accountTone(status: Account['status']): 'success' | 'warning' | 'neutral' {
+    switch (status) {
+      case 'ACTIVE':
+        return 'success';
+      case 'FROZEN':
+        return 'warning';
+      default:
+        return 'neutral';
+    }
   }
 }

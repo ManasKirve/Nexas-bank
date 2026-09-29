@@ -29,8 +29,12 @@ export function buildAccountForm(preselectedCustomerId: number | null): FormGrou
   imports: [ReactiveFormsModule, RouterLink],
   template: `
     <section class="page narrow">
-      <h1>Open account</h1>
-      <p class="muted">New accounts start with a zero balance — deposits arrive in a later phase.</p>
+      <header class="page-head">
+        <div>
+          <h1>Open account</h1>
+          <p class="muted">New accounts start with a zero balance — deposits arrive in a later phase.</p>
+        </div>
+      </header>
       <form [formGroup]="form" (ngSubmit)="onSubmit()" class="card form" novalidate>
         <label>Customer
           <select formControlName="customerId">
@@ -63,27 +67,27 @@ export function buildAccountForm(preselectedCustomerId: number | null): FormGrou
           <p class="form-success" role="status">{{ success() }}</p>
         }
         <div class="row">
-          <button type="submit" [disabled]="form.invalid || saving()">
+          <button type="submit" class="btn primary" [disabled]="form.invalid || saving()">
             {{ saving() ? 'Opening…' : 'Open account' }}
           </button>
-          <a routerLink="/accounts" class="cancel">Cancel</a>
+          <a routerLink="/accounts" class="btn ghost">Cancel</a>
         </div>
       </form>
     </section>
   `,
   styles: [
     `
-      .narrow { max-width: 560px; margin: 0 auto; }
-      .form { display: grid; gap: 0.85rem; }
-      label { display: grid; gap: 0.35rem; font-weight: 600; font-size: 0.9rem; }
-      input, select { padding: 0.6rem; border: 1px solid #dadce0; border-radius: 8px; font-size: 1rem; font-weight: 400; }
-      button { padding: 0.65rem; border-radius: 8px; border: 0; background: #174ea6; color: #fff; font-weight: 600; cursor: pointer; }
-      button:disabled { opacity: 0.55; cursor: not-allowed; }
-      .row { display: flex; gap: 0.75rem; align-items: center; }
-      .cancel { color: #174ea6; }
-      .field-error { color: #a50e0e; font-size: 0.8rem; font-weight: 400; }
-      .form-error { color: #a50e0e; background: #fce8e6; border: 1px solid #f5b5b0; padding: 0.6rem; border-radius: 8px; margin: 0; }
-      .form-success { color: #137333; background: #e6f4ea; border: 1px solid #b7dfc2; padding: 0.6rem; border-radius: 8px; margin: 0; }
+      .narrow {
+        max-width: 560px;
+        margin: 0 auto;
+        width: 100%;
+      }
+      .row {
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+        flex-wrap: wrap;
+      }
     `,
   ],
 })

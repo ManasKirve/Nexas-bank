@@ -19,9 +19,9 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge/statu
       </header>
 
       @if (loading()) {
-        <div class="card"><p>Loading accounts…</p></div>
+        <div class="card"><p class="muted">Loading accounts…</p></div>
       } @else if (error()) {
-        <div class="card error">
+        <div class="card error-card">
           <p>{{ error() }}</p>
           <button type="button" class="btn ghost" (click)="reload()">Retry</button>
         </div>
@@ -31,44 +31,39 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge/statu
           <a routerLink="/accounts/new" class="btn primary">Open account</a>
         </div>
       } @else {
-        <div class="card table-card">
-          <table>
-            <thead>
-              <tr><th>Number</th><th>Customer</th><th>Type</th><th>Balance</th><th>Status</th><th></th></tr>
-            </thead>
-            <tbody>
-              @for (a of accounts(); track a.id) {
+        <div class="card">
+          <div class="table-scroll">
+            <table class="stackable">
+              <thead>
                 <tr>
-                  <td>{{ a.accountNumber }}</td>
-                  <td>{{ a.customerNumber }}</td>
-                  <td>{{ a.accountType }}</td>
-                  <td>{{ a.balance }} {{ a.currency }}</td>
-                  <td><app-status-badge [label]="a.status" [tone]="tone(a.status)" /></td>
-                  <td class="actions"><a [routerLink]="['/accounts', a.id]">View</a></td>
+                  <th>Number</th>
+                  <th>Customer</th>
+                  <th>Type</th>
+                  <th class="num">Balance</th>
+                  <th>Status</th>
+                  <th class="right"></th>
                 </tr>
-              }
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                @for (a of accounts(); track a.id) {
+                  <tr>
+                    <td data-label="Number"><code>{{ a.accountNumber }}</code></td>
+                    <td data-label="Customer"><code>{{ a.customerNumber }}</code></td>
+                    <td data-label="Type" class="cell-strong">{{ a.accountType }}</td>
+                    <td class="num cell-strong" data-label="Balance">{{ a.balance }} {{ a.currency }}</td>
+                    <td data-label="Status"><app-status-badge [label]="a.status" [tone]="tone(a.status)" /></td>
+                    <td class="right" data-label="">
+                      <a [routerLink]="['/accounts', a.id]" class="btn ghost small">View</a>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         </div>
       }
     </section>
   `,
-  styles: [
-    `
-      .page-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
-      h1 { margin: 0; }
-      .muted { color: #5f6368; margin: 0.25rem 0 0; }
-      .table-card { overflow-x: auto; }
-      table { width: 100%; border-collapse: collapse; }
-      th, td { text-align: left; padding: 0.6rem; border-bottom: 1px solid #e8eaed; font-size: 0.9rem; }
-      th { color: #5f6368; }
-      .actions { text-align: right; }
-      .empty, .error { display: grid; gap: 0.75rem; justify-items: start; }
-      .btn { text-decoration: none; padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; border: 0; cursor: pointer; }
-      .btn.primary { background: #174ea6; color: #fff; }
-      .btn.ghost { border: 1px solid #2f6fed; color: #2f6fed; background: #fff; }
-    `,
-  ],
 })
 export class AccountListComponent implements OnInit {
   private readonly accountsApi = inject(AccountService);

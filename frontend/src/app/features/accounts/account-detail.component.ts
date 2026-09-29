@@ -37,22 +37,30 @@ function moneyForm(): FormGroup<{ amount: FormControl<string | null>; descriptio
     <section class="page">
       <a routerLink="/accounts" class="back">← All accounts</a>
       @if (loading()) {
-        <div class="card"><p>Loading account…</p></div>
+        <div class="card"><p class="muted">Loading account…</p></div>
       } @else if (error()) {
-        <div class="card error"><p>{{ error() }}</p></div>
+        <div class="card error-card"><p>{{ error() }}</p></div>
       } @else if (account()) {
-        <header class="page-head">
-          <div>
-            <h1>{{ account()!.accountNumber }}</h1>
-            <p class="muted">{{ account()!.accountType }} · {{ account()!.currency }}</p>
+        <div class="hero">
+          <div class="hero-main">
+            <span class="overline">{{ account()!.accountType }} account</span>
+            <p class="hero-amount">
+              <span class="hero-currency">{{ account()!.currency }}</span>
+              {{ account()!.balance }}
+            </p>
+            <span class="hero-meta">Available balance · {{ account()!.accountNumber }}</span>
           </div>
-          <app-status-badge [label]="account()!.status" tone="info" />
-        </header>
+          <div class="hero-side">
+            <h1>{{ account()!.accountNumber }}</h1>
+            <app-status-badge [label]="account()!.status" [tone]="statusTone(account()!.status)" />
+          </div>
+        </div>
+
         <div class="grid">
           <div class="card">
             <h3>Details</h3>
             <dl>
-              <div><dt>Balance</dt><dd>{{ account()!.balance }} {{ account()!.currency }}</dd></div>
+              <div><dt>Account type</dt><dd>{{ account()!.accountType }}</dd></div>
               <div><dt>Customer</dt><dd><a [routerLink]="['/customers', account()!.customerId]">{{ account()!.customerNumber }}</a></dd></div>
               <div><dt>Created</dt><dd>{{ account()!.createdAt }}</dd></div>
               <div><dt>Updated</dt><dd>{{ account()!.updatedAt }}</dd></div>
@@ -118,10 +126,10 @@ function moneyForm(): FormGroup<{ amount: FormControl<string | null>; descriptio
           <p class="action" role="status">{{ txnMessage() }}</p>
         }
         @if (txnError()) {
-          <div class="card error"><p>{{ txnError() }}</p></div>
+          <div class="card error-card"><p>{{ txnError() }}</p></div>
         }
 
-        <div class="card history">
+        <div class="card">
           <h3>Transaction history</h3>
           <app-transaction-history [transactions]="transactions()" [loading]="historyLoading()" />
         </div>
@@ -130,26 +138,71 @@ function moneyForm(): FormGroup<{ amount: FormControl<string | null>; descriptio
   `,
   styles: [
     `
-      .back { display: inline-block; margin-bottom: 1rem; color: #174ea6; }
-      .page-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
-      h1 { margin: 0; }
-      .muted { color: #5f6368; }
-      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
-      dl > div { display: flex; gap: 1rem; padding: 0.35rem 0; }
-      dt { font-weight: 600; min-width: 90px; color: #5f6368; }
-      dd { margin: 0; }
-      .row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-      .btn { padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer; }
-      .btn.ghost { border: 1px solid #2f6fed; color: #2f6fed; background: #fff; }
-      .btn.primary { background: #174ea6; color: #fff; border: 0; margin-top: 0.5rem; }
-      .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-      .action { color: #137333; }
-      .error { color: #a50e0e; }
-      .field-error { color: #a50e0e; font-size: 0.85rem; margin: 0.25rem 0 0; }
-      form { display: grid; gap: 0.6rem; }
-      label { display: grid; gap: 0.3rem; font-weight: 600; font-size: 0.9rem; }
-      input { padding: 0.55rem 0.7rem; border: 1px solid #dadce0; border-radius: 8px; font-size: 0.95rem; font-weight: 400; }
-      .history { margin-top: 1rem; overflow-x: auto; }
+      .hero {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+        padding: 1.35rem 1.5rem;
+        border-radius: var(--nx-r-lg);
+        background: linear-gradient(135deg, #16233d 0%, #0f1b31 55%, #122a45 100%);
+        color: #fff;
+      }
+      .hero .overline {
+        color: #93a6c8;
+      }
+      .hero-amount {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        margin: 0.3rem 0 0.25rem;
+        font-size: 2.25rem;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
+      }
+      .hero-currency {
+        font-size: 0.875rem;
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        color: #93a6c8;
+      }
+      .hero-meta {
+        font-size: 0.75rem;
+        color: #93a6c8;
+      }
+      .hero-side {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .hero-side h1 {
+        margin: 0;
+        font-size: 1.125rem;
+        font-weight: 650;
+        letter-spacing: -0.012em;
+        color: #fff;
+      }
+      .row {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+      .action {
+        color: var(--nx-success);
+        font-size: 0.8125rem;
+        font-weight: 500;
+      }
+      @media (max-width: 640px) {
+        .hero {
+          padding: 1.15rem;
+        }
+        .hero-amount {
+          font-size: 1.75rem;
+        }
+      }
     `,
   ],
 })
@@ -174,6 +227,17 @@ export class AccountDetailComponent implements OnInit {
   nextActions(): AccountStatus[] {
     const current = this.account()?.status;
     return current ? NEXT_ACTIONS[current] : [];
+  }
+
+  statusTone(status: AccountStatus): 'success' | 'warning' | 'neutral' {
+    switch (status) {
+      case 'ACTIVE':
+        return 'success';
+      case 'FROZEN':
+        return 'warning';
+      default:
+        return 'neutral';
+    }
   }
 
   ngOnInit(): void {

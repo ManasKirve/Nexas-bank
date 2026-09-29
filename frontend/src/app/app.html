@@ -1,43 +1,75 @@
-<div class="shell" [class.collapsed]="!sidebarOpen()">
+<div class="shell" [class.collapsed]="!sidebarOpen()" [class.drawer-open]="drawerOpen()">
+  <div class="scrim" (click)="closeDrawer()" aria-hidden="true"></div>
+
   <aside class="sidebar" aria-label="Primary">
     <div class="brand">
-      <span class="brand-mark">N</span>
-      @if (sidebarOpen()) {
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 9.5 12 4l8 5.5M6.5 10.5V19h11v-8.5M10 19v-4.5h4V19" />
+        </svg>
+      </span>
+      <span class="brand-text">
         <span class="brand-name">{{ appName() }}</span>
-      }
+        <span class="brand-sub">Digital Banking</span>
+      </span>
     </div>
-      <nav class="nav">
-        @for (item of nav; track item.path) {
-        <a
-          [routerLink]="item.path"
-          routerLinkActive="active"
-          [routerLinkActiveOptions]="{ exact: false }"
-          class="nav-link"
-        >
-          <span class="dot" aria-hidden="true"></span>
-          @if (sidebarOpen()) {
-            <span>{{ item.label }}</span>
+
+    <nav class="nav">
+      @for (group of navGroups; track group.label) {
+        <div class="nav-group">
+          <span class="nav-group-label">{{ group.label }}</span>
+          @for (item of group.items; track item.path) {
+            <a
+              [routerLink]="item.path"
+              routerLinkActive="active"
+              [routerLinkActiveOptions]="{ exact: false }"
+              class="nav-link"
+              (click)="closeDrawer()"
+              [title]="sidebarOpen() ? null : item.label"
+            >
+              <span class="nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <path [attr.d]="item.icon" />
+                </svg>
+              </span>
+              <span class="nav-text">{{ item.label }}</span>
+            </a>
           }
-        </a>
+        </div>
       }
     </nav>
+
     <div class="side-foot">
-      @if (sidebarOpen()) {
-        <span class="muted">Local demo · LocalStorage</span>
-      }
+      <div class="side-foot-row">
+        <span class="side-foot-dot" aria-hidden="true"></span>
+        <span class="side-foot-text">
+          <span class="side-foot-title">Local demo</span>
+          <span class="side-foot-meta">LocalStorage · {{ year() }}</span>
+        </span>
+      </div>
     </div>
   </aside>
 
   <div class="main">
     <header class="topbar">
-      <button type="button" class="icon-btn" (click)="toggleSidebar()" aria-label="Toggle sidebar">☰</button>
+      <button type="button" class="icon-btn" (click)="toggleSidebar()" [attr.aria-expanded]="sidebarOpen() || drawerOpen()" aria-label="Toggle navigation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 7h16M4 12h16M4 17h16" />
+        </svg>
+      </button>
+
       <div class="top-title">
-        <strong>{{ appName() }}</strong>
-        <span class="muted">Enterprise Digital Banking &amp; Fraud Monitoring</span>
+        <strong class="top-brand">{{ appName() }}</strong>
+        <span class="top-tagline">Enterprise Digital Banking &amp; Fraud Monitoring</span>
       </div>
+
       <div class="top-actions">
-        <a routerLink="/admin" class="muted user-chip" title="Change the demo customer in Admin">
-          Acting as {{ actingCustomer() }}
+        <a routerLink="/admin" class="user-chip" title="Change the demo customer in Admin">
+          <span class="avatar" aria-hidden="true">{{ actingCustomer().slice(0, 1) }}</span>
+          <span class="user-chip-text">
+            <span class="user-chip-label">Acting as</span>
+            <span class="user-chip-value">{{ actingCustomer() }}</span>
+          </span>
         </a>
         <a routerLink="/admin" class="btn ghost">Demo settings</a>
       </div>

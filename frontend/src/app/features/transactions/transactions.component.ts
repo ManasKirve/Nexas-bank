@@ -2,7 +2,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { StatusBadgeComponent } from '../../shared/components/status-badge/status-badge.component';
 import { TransactionService } from '../../core/services/transaction.service';
-import { Transaction } from '../../shared/models/transaction.model';
+import { Transaction, TransactionStatus } from '../../shared/models/transaction.model';
 
 type TypeFilter = 'ALL' | 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER';
 
@@ -20,77 +20,94 @@ type TypeFilter = 'ALL' | 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER';
   imports: [StatusBadgeComponent, DatePipe, DecimalPipe],
   template: `
     <section class="page">
-      <h1>Transactions</h1>
-      <p class="muted">Immutable ledger for the demo customer selected in Admin.</p>
+      <header class="page-head">
+        <div>
+          <h1>Transactions</h1>
+          <p class="muted">Immutable ledger for the demo customer selected in Admin.</p>
+        </div>
+        <span class="count-pill">{{ rows().length }} shown</span>
+      </header>
 
       <div class="card filters">
-        @for (option of filterOptions; track option) {
-          <button
-            type="button"
-            class="chip"
-            [class.active]="filter() === option"
-            (click)="filter.set(option)"
-          >
-            {{ option }}
-          </button>
-        }
+        <div class="toolbar" role="group" aria-label="Filter transactions by type">
+          @for (option of filterOptions; track option) {
+            <button
+              type="button"
+              class="chip"
+              [class.active]="filter() === option"
+              (click)="filter.set(option)"
+            >
+              {{ option }}
+            </button>
+          }
+        </div>
       </div>
 
-      <div class="card table-card">
+      <div class="card">
         @if (loading()) {
-          <p>Loading history…</p>
+          <p class="muted">Loading history…</p>
         } @else if (rows().length === 0) {
           <p class="muted">No transactions for this filter yet.</p>
         } @else {
-          <table>
-            <thead>
-              <tr>
-                <th>Reference</th>
-                <th>Date</th>
-                <th>Account</th>
-                <th>Type</th>
-                <th>Amount</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (t of rows(); track t.transactionReference) {
+          <div class="table-scroll">
+            <table class="stackable">
+              <thead>
                 <tr>
-                  <td><code>{{ t.transactionReference }}</code></td>
-                  <td>{{ t.createdAt | date: 'medium' }}</td>
-                  <td>{{ t.accountNumber }}</td>
-                  <td>{{ labelFor(t) }}</td>
-                  <td [class.credit]="isCredit(t)" [class.debit]="!isCredit(t)">
-                    {{ isCredit(t) ? '+' : '−' }}{{ t.amount | number: '1.2-2' }} {{ t.currency }}
-                  </td>
-                  <td>
-                    <app-status-badge
-                      [label]="t.status"
-                      [tone]="t.status === 'COMPLETED' ? 'success' : 'warning'"
-                    />
-                  </td>
+                  <th>Reference</th>
+                  <th>Date</th>
+                  <th>Account</th>
+                  <th>Type</th>
+                  <th class="num">Amount</th>
+                  <th>Status</th>
                 </tr>
-              }
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                @for (t of rows(); track t.transactionReference) {
+                  <tr>
+                    <td data-label="Reference"><code>{{ t.transactionReference }}</code></td>
+                    <td class="nowrap" data-label="Date">
+                      <span class="cell-strong">{{ t.createdAt | date: 'dd MMM y' }}</span>
+                      <span class="muted at-time">{{ t.createdAt | date: 'HH:mm' }}</span>
+                    </td>
+                    <td data-label="Account"><code>{{ t.accountNumber }}</code></td>
+                    <td data-label="Type" class="cell-strong">{{ labelFor(t) }}</td>
+                    <td class="num" [class.credit]="isCredit(t)" [class.debit]="!isCredit(t)" data-label="Amount">
+                      {{ isCredit(t) ? '+' : '−' }}{{ t.amount | number: '1.2-2' }} {{ t.currency }}
+                    </td>
+                    <td data-label="Status">
+                      <app-status-badge [label]="t.status" [tone]="statusTone(t.status)" />
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         }
       </div>
     </section>
   `,
   styles: [
     `
-      h1 { margin: 0 0 0.25rem; }
-      .muted { color: #5f6368; }
-      .card { margin-top: 1rem; padding: 1rem 1.25rem; border: 1px solid #e8eaed; border-radius: 12px; }
-      .filters { display: flex; gap: 0.5rem; flex-wrap: wrap; padding: 0.75rem 1.25rem; }
-      .chip { border: 1px solid #dadce0; background: #fff; border-radius: 999px; padding: 0.3rem 0.9rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
-      .chip.active { background: #174ea6; border-color: #174ea6; color: #fff; }
-      table { width: 100%; border-collapse: collapse; }
-      th, td { text-align: left; padding: 0.6rem; border-bottom: 1px solid #e8eaed; }
-      th { color: #5f6368; }
-      code { background: #f1f3f4; padding: 0.05rem 0.3rem; border-radius: 4px; }
-      .credit { color: #137333; }
-      .debit { color: #a50e0e; }
+      .count-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.7rem;
+        border: 1px solid var(--nx-border);
+        border-radius: var(--nx-r-pill);
+        background: var(--nx-surface);
+        color: var(--nx-muted);
+        font-size: 0.75rem;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .filters {
+        padding: 0.7rem 0.9rem;
+      }
+      .at-time {
+        display: block;
+        font-size: 0.6875rem;
+        color: var(--nx-faint);
+      }
     `,
   ],
 })
@@ -142,6 +159,20 @@ export class TransactionsComponent implements OnInit {
         return `Transfer out → ${t.counterpartyAccountNumber ?? '—'}`;
       case 'TRANSFER_CREDIT':
         return `Transfer in ← ${t.counterpartyAccountNumber ?? '—'}`;
+    }
+  }
+
+  statusTone(status: TransactionStatus): 'success' | 'warning' | 'danger' | 'neutral' {
+    switch (status) {
+      case 'COMPLETED':
+        return 'success';
+      case 'PENDING':
+        return 'warning';
+      case 'FAILED':
+      case 'REVERSED':
+        return 'danger';
+      default:
+        return 'neutral';
     }
   }
 }

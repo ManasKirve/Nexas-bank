@@ -1,6 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { StatusBadgeComponent } from '../../shared/components/status-badge/status-badge.component';
 import { AccountService } from '../../core/services/account.service';
 import { BeneficiaryService } from '../../core/services/beneficiary.service';
 import { TransferService } from '../../core/services/transfer.service';
@@ -16,14 +17,18 @@ const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
 @Component({
   selector: 'app-transfers',
   standalone: true,
-  imports: [ReactiveFormsModule, TransactionHistoryComponent],
+  imports: [ReactiveFormsModule, StatusBadgeComponent, TransactionHistoryComponent],
   template: `
     <section class="page">
-      <h1>Transfers</h1>
-      <p class="muted">Move money between NexaBank accounts via your beneficiaries.</p>
+      <header class="page-head">
+        <div>
+          <h1>Transfers</h1>
+          <p class="muted">Move money between NexaBank accounts via your beneficiaries.</p>
+        </div>
+      </header>
 
       @if (loading()) {
-        <div class="card"><p>Loading accounts and beneficiaries…</p></div>
+        <div class="card"><p class="muted">Loading accounts and beneficiaries…</p></div>
       } @else {
         <div class="grid">
           <div class="card">
@@ -59,7 +64,7 @@ const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
               </button>
             </form>
             @if (transferError()) {
-              <p class="error" role="alert">{{ transferError() }}</p>
+              <p class="form-error" role="alert">{{ transferError() }}</p>
             }
             @if (result()) {
               <div class="result" role="status">
@@ -75,10 +80,13 @@ const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
             @if (beneficiaries().length === 0) {
               <p class="muted">No beneficiaries yet — add one below.</p>
             } @else {
-              <ul class="ben-list">
+              <ul class="ruled">
                 @for (b of beneficiaries(); track b.id) {
                   <li>
-                    <span><strong>{{ b.nickname }}</strong> · {{ b.beneficiaryAccountNumber }}</span>
+                    <span class="ben-text">
+                      <span class="cell-strong">{{ b.nickname }}</span>
+                      <span class="muted">{{ b.beneficiaryAccountNumber }}</span>
+                    </span>
                     @if (b.status === 'ACTIVE') {
                       <button
                         type="button"
@@ -89,13 +97,13 @@ const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
                         Disable
                       </button>
                     } @else {
-                      <span class="muted">disabled</span>
+                      <app-status-badge label="Disabled" tone="neutral" />
                     }
                   </li>
                 }
               </ul>
             }
-            <h4>Add beneficiary</h4>
+            <h4 class="section-title">Add beneficiary</h4>
             <form [formGroup]="beneficiaryForm" (ngSubmit)="addBeneficiary()">
               <label>Destination account ID
                 <input type="number" formControlName="accountId" min="1" step="1" placeholder="e.g. 12" />
@@ -111,7 +119,7 @@ const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
               </button>
             </form>
             @if (beneficiaryError()) {
-              <p class="error" role="alert">{{ beneficiaryError() }}</p>
+              <p class="form-error" role="alert">{{ beneficiaryError() }}</p>
             }
             @if (beneficiaryMessage()) {
               <p class="action" role="status">{{ beneficiaryMessage() }}</p>
@@ -120,7 +128,7 @@ const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
         </div>
 
         @if (recentTransfers().length > 0) {
-          <div class="card history">
+          <div class="card">
             <h3>Recent transfers</h3>
             <app-transaction-history [transactions]="recentTransfers()" />
           </div>
@@ -130,27 +138,26 @@ const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
   `,
   styles: [
     `
-      h1 { margin: 0 0 0.25rem; }
-      .muted { color: #5f6368; }
-      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin-top: 1rem; }
-      form { display: grid; gap: 0.6rem; margin-top: 0.5rem; }
-      label { display: grid; gap: 0.3rem; font-weight: 600; font-size: 0.9rem; }
-      input, select { padding: 0.55rem 0.7rem; border: 1px solid #dadce0; border-radius: 8px; font-size: 0.95rem; font-weight: 400; }
-      .btn { padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer; }
-      .btn.primary { background: #174ea6; color: #fff; border: 0; }
-      .btn.ghost { border: 1px solid #2f6fed; color: #2f6fed; background: #fff; }
-      .btn.small { padding: 0.35rem 0.7rem; font-size: 0.8rem; }
-      .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-      .field-error { color: #a50e0e; font-size: 0.85rem; margin: 0; }
-      .error { color: #a50e0e; }
-      .action { color: #137333; }
-      .result { margin-top: 0.75rem; padding: 0.75rem; border: 1px solid #ceead6; border-radius: 8px; background: #f6fef9; }
-      .result h4 { margin: 0 0 0.35rem; }
-      .result p { margin: 0.2rem 0; }
-      .ben-list { list-style: none; margin: 0 0 0.5rem; padding: 0; display: grid; gap: 0.5rem; }
-      .ben-list li { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid #e8eaed; }
-      h4 { margin: 1rem 0 0.25rem; }
-      .history { margin-top: 1rem; overflow-x: auto; }
+      .ben-text {
+        display: grid;
+        min-width: 0;
+      }
+      .ben-text .muted {
+        font-size: 0.75rem;
+        font-family: var(--nx-mono);
+      }
+      .section-title {
+        margin: 1.25rem 0 0.25rem;
+      }
+      .action {
+        color: var(--nx-success);
+        font-size: 0.8125rem;
+        font-weight: 500;
+      }
+      .result + form,
+      form + .result {
+        margin-top: 0.25rem;
+      }
     `,
   ],
 })

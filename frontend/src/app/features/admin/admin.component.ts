@@ -35,8 +35,12 @@ interface StorageCounts {
   imports: [StatusBadgeComponent, DatePipe],
   template: `
     <section class="page">
-      <h1>Admin</h1>
-      <p class="muted">Local demo settings — no backend, no accounts, no passwords.</p>
+      <header class="page-head">
+        <div>
+          <h1>Admin</h1>
+          <p class="muted">Local demo settings — no backend, no accounts, no passwords.</p>
+        </div>
+      </header>
 
       <div class="card">
         <h3>Acting demo customer</h3>
@@ -44,7 +48,7 @@ interface StorageCounts {
           Every “my …” screen acts on behalf of this customer. This replaces the JWT
           identity the Docker build derived from the signed-in user.
         </p>
-        <label>
+        <label class="select-label">
           <span class="visually-hidden">Acting customer</span>
           <select
             [value]="activeCustomerId()"
@@ -57,7 +61,7 @@ interface StorageCounts {
           </select>
         </label>
         @if (activeCustomer()) {
-          <p class="muted">
+          <p class="note">
             {{ activeCustomer()!.email }} · {{ accountCount() }} account(s)
           </p>
         }
@@ -70,12 +74,12 @@ interface StorageCounts {
           approximately {{ sizeKb() }} KB
         </p>
         @if (!storageAvailable()) {
-          <p class="warn">
+          <p class="form-error">
             LocalStorage is unavailable (private mode or storage disabled). The demo keeps
             running but nothing will persist.
           </p>
         }
-        <dl>
+        <dl class="counts">
           <div><dt>Customers</dt><dd>{{ counts().customers }}</dd></div>
           <div><dt>Accounts</dt><dd>{{ counts().accounts }}</dd></div>
           <div><dt>Transactions</dt><dd>{{ counts().transactions }}</dd></div>
@@ -97,7 +101,7 @@ interface StorageCounts {
           </button>
         } @else {
           <div class="confirm">
-            <p><strong>Are you sure?</strong> This cannot be undone.</p>
+            <p class="cell-strong">Are you sure? This cannot be undone.</p>
             <button type="button" class="btn danger" (click)="reset()">Yes, reset everything</button>
             <button type="button" class="btn ghost" (click)="confirmingReset.set(false)">Cancel</button>
           </div>
@@ -138,29 +142,97 @@ interface StorageCounts {
   `,
   styles: [
     `
-      h1 { margin: 0 0 0.25rem; }
-      .muted { color: #5f6368; }
-      .card { margin-top: 1rem; padding: 1rem 1.25rem; border: 1px solid #e8eaed; border-radius: 12px; }
-      h3 { margin: 0 0 0.5rem; }
-      select { padding: 0.55rem 0.7rem; border: 1px solid #dadce0; border-radius: 8px; font-size: 0.95rem; min-width: 280px; }
-      dl { margin: 0.75rem 0 0; display: grid; gap: 0.25rem; }
-      dl > div { display: flex; gap: 1rem; }
-      dt { color: #5f6368; min-width: 140px; }
-      dd { margin: 0; font-weight: 600; }
-      .btn { padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer; border: 0; }
-      .btn.danger { background: #a50e0e; color: #fff; }
-      .btn.ghost { background: #fff; border: 1px solid #2f6fed; color: #2f6fed; margin-left: 0.5rem; }
-      .confirm { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-      .confirm p { margin: 0 0.5rem 0 0; }
-      .action { color: #137333; }
-      .warn { color: #a50e0e; }
-      .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-      .activity { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
-      .activity li { display: grid; grid-template-columns: 150px 1fr auto; gap: 0.75rem; align-items: baseline; padding-bottom: 0.4rem; border-bottom: 1px solid #f1f3f4; }
-      .type { font-family: ui-monospace, monospace; font-size: 0.75rem; color: #174ea6; }
-      .at { font-size: 0.8rem; }
-      .rules { margin: 0.5rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; }
-      code { background: #f1f3f4; padding: 0.05rem 0.3rem; border-radius: 4px; }
+      .select-label {
+        max-width: 340px;
+        margin-top: 0.5rem;
+      }
+      .counts {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.5rem;
+        margin-top: 0.85rem;
+      }
+      .counts > div {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.15rem;
+        padding: 0.6rem 0.75rem;
+        border: 1px solid var(--nx-border);
+        border-radius: var(--nx-r-md);
+        background: var(--nx-surface-2);
+        border-bottom: 1px solid var(--nx-border);
+      }
+      .counts dt {
+        min-width: 0;
+        font-size: 0.6875rem;
+        font-weight: 650;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .counts dd {
+        font-size: 1.125rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .confirm {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+      }
+      .confirm p {
+        margin: 0 0.25rem 0 0;
+      }
+      .action {
+        margin-top: 0.75rem;
+        color: var(--nx-success);
+        font-size: 0.8125rem;
+        font-weight: 500;
+      }
+      .form-error {
+        margin-top: 0.75rem;
+      }
+      .activity {
+        list-style: none;
+        display: grid;
+        gap: 0.15rem;
+      }
+      .activity li {
+        display: grid;
+        grid-template-columns: 150px 1fr auto;
+        gap: 0.75rem;
+        align-items: baseline;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--nx-border);
+      }
+      .activity li:last-child {
+        border-bottom: 0;
+      }
+      .summary {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .type {
+        font-family: var(--nx-mono);
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: var(--nx-accent);
+      }
+      .at {
+        font-size: 0.75rem;
+        white-space: nowrap;
+      }
+      .rules {
+        margin: 0.5rem 0 0;
+        padding-left: 1.15rem;
+        display: grid;
+        gap: 0.4rem;
+        font-size: 0.8125rem;
+      }
+      @media (max-width: 640px) {
+        .activity li {
+          grid-template-columns: 1fr;
+          gap: 0.15rem;
+        }
+      }
     `,
   ],
 })

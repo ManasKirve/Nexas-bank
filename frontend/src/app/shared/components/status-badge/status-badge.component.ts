@@ -8,22 +8,35 @@ import { CommonModule } from '@angular/common';
   selector: 'app-status-badge',
   standalone: true,
   imports: [CommonModule],
-  template: `<span class="badge" [ngClass]="tone()">{{ label() }}</span>`,
+  template: `<span class="badge" [ngClass]="tone()"><span class="dot" aria-hidden="true"></span>{{ label() }}</span>`,
   styles: [
     `
       .badge {
-        display: inline-block;
-        padding: 0.2rem 0.65rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.15rem 0.55rem 0.15rem 0.45rem;
         border-radius: 999px;
-        font-size: 0.75rem;
-        font-weight: 600;
+        border: 1px solid transparent;
+        font-size: 0.6875rem;
+        font-weight: 650;
         letter-spacing: 0.02em;
+        line-height: 1.5;
+        white-space: nowrap;
+        text-transform: capitalize;
       }
-      .success { background: #e6f4ea; color: #137333; border: 1px solid #b7dfc2; }
-      .warning { background: #fef7e0; color: #8a5a00; border: 1px solid #f3d98b; }
-      .danger { background: #fce8e6; color: #a50e0e; border: 1px solid #f5b5b0; }
-      .info { background: #e8f0fe; color: #174ea6; border: 1px solid #b9cdf5; }
-      .neutral { background: #f1f3f4; color: #3c4043; border: 1px solid #dadce0; }
+      .dot {
+        width: 5px;
+        height: 5px;
+        flex: 0 0 5px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      .success { background: var(--nx-success-soft); color: var(--nx-success); border-color: var(--nx-success-line); }
+      .warning { background: var(--nx-warning-soft); color: var(--nx-warning); border-color: var(--nx-warning-line); }
+      .danger { background: var(--nx-danger-soft); color: var(--nx-danger); border-color: var(--nx-danger-line); }
+      .info { background: var(--nx-info-soft); color: var(--nx-info); border-color: var(--nx-info-line); }
+      .neutral { background: var(--nx-surface-3); color: var(--nx-ink-2); border-color: var(--nx-border); }
     `,
   ],
 })
