@@ -74,11 +74,21 @@ export function paginate<T>(all: T[], pageNumber: number, size: number, maxSize:
 }
 
 /**
+ * The timestamp columns the local store is allowed to order by. Every caller
+ * carries an ISO date string under one of them, so both are optional: a
+ * `FraudAlert` only has `createdAt`, a `FraudEvaluation` only `evaluatedAt`.
+ */
+export interface SortableTimestamp {
+  createdAt?: string;
+  evaluatedAt?: string;
+}
+
+/**
  * Newest first, with an explicit tie-break. The backend ordered by
  * `createdAt DESC, id DESC`; the local store keeps the same deterministic
  * ordering so paging is stable.
  */
-export function byNewestFirst<T>(
+export function byNewestFirst<T extends SortableTimestamp>(
   sortField: 'createdAt' | 'evaluatedAt',
   tiebreak: (item: T) => number | string = () => 0,
 ): (a: T, b: T) => number {
