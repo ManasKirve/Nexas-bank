@@ -1,11 +1,12 @@
 /**
- * Local demo build — no backend.
+ * Production build configuration.
  *
- * `apiBaseUrl` was removed together with every `HttpClient` call: the data now
- * lives in LocalStorage via `LocalStorageService`, so there is no server address
- * to configure. The Spring Boot service in `backend/` is kept as the enterprise
- * reference architecture and is not used by this build.
+ * `apiBaseUrl` is the Spring Boot backend origin. Override it at build time to
+ * point the SPA at a deployed API (e.g. via a CI substitution or a value
+ * injected before `ng build`). The dev configuration overrides this file with
+ * `ng build --configuration development` / `ng serve`.
  */
 export const environment = {
   production: true,
+  apiBaseUrl: 'http://localhost:8080',
 };

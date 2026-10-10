@@ -6,6 +6,7 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge/statu
 import { DashboardService } from '../../core/services/dashboard.service';
 import { AccountService } from '../../core/services/account.service';
 import { TransactionService } from '../../core/services/transaction.service';
+import { AuthService } from '../../core/services/auth.service';
 import { TransactionHistoryComponent } from '../transactions/transaction-history.component';
 import { DashboardSummary } from '../../shared/models/dashboard.model';
 import { Account } from '../../shared/models/account.model';
@@ -20,7 +21,7 @@ import { Transaction } from '../../shared/models/transaction.model';
       <header class="page-head">
         <div>
           <h1>Dashboard</h1>
-          <p class="muted">Live overview from the local demo dataset.</p>
+          <p class="muted">Live overview from the NexaBank API.</p>
         </div>
         <app-backend-status />
       </header>
@@ -29,8 +30,8 @@ import { Transaction } from '../../shared/models/transaction.model';
         <div class="card"><p class="muted">Loading overview…</p></div>
       } @else if (summary() === null) {
         <div class="card empty">
-          <p>Overview is empty — the demo dataset has not been seeded.</p>
-          <p class="muted">Open Admin and use “Reset Demo Data”, or reload the page.</p>
+          <p>Overview is unavailable — the backend may be starting up.</p>
+          <p class="muted">Check that the API is running, then retry.</p>
           <button type="button" class="btn ghost" (click)="reload()">Retry</button>
         </div>
       } @else {
@@ -88,6 +89,7 @@ import { Transaction } from '../../shared/models/transaction.model';
         }
       }
 
+      @if (isCustomer()) {
       <div class="card finances">
         <h3>My finances</h3>
         @if (financesLoading()) {
@@ -101,7 +103,7 @@ import { Transaction } from '../../shared/models/transaction.model';
                 {{ totalBalance() | number: '1.0-2' }}
               </p>
               <span class="hero-meta">
-                {{ myAccounts()?.length ?? 0 }} account(s) · acting demo customer
+                {{ myAccounts()?.length ?? 0 }} account(s) · signed-in customer
               </span>
             </div>
             <div class="hero-side">
@@ -150,10 +152,12 @@ import { Transaction } from '../../shared/models/transaction.model';
           }
         }
       </div>
+      }
 
       <div class="card">
         <h3>Quick actions</h3>
         <div class="quick">
+          @if (canMoveMoney()) {
           <a routerLink="/transfers" class="quick-link">
             <span class="quick-icon tone-accent" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -165,6 +169,8 @@ import { Transaction } from '../../shared/models/transaction.model';
               <span class="quick-meta">Pay a beneficiary</span>
             </span>
           </a>
+          }
+          @if (isStaff()) {
           <a routerLink="/accounts/new" class="quick-link">
             <span class="quick-icon tone-accent" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -187,6 +193,8 @@ import { Transaction } from '../../shared/models/transaction.model';
               <span class="quick-meta">Create a new profile</span>
             </span>
           </a>
+          }
+          @if (canViewFraud()) {
           <a routerLink="/fraud" class="quick-link">
             <span class="quick-icon tone-danger" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -198,6 +206,7 @@ import { Transaction } from '../../shared/models/transaction.model';
               <span class="quick-meta">Review held attempts</span>
             </span>
           </a>
+          }
         </div>
       </div>
     </section>
@@ -396,6 +405,13 @@ export class DashboardComponent implements OnInit {
   private readonly dashboardApi = inject(DashboardService);
   private readonly accountsApi = inject(AccountService);
   private readonly transactionsApi = inject(TransactionService);
+  private readonly auth = inject(AuthService);
+
+  /** Only CUSTOMER users have a customer-linked account set the API can resolve. */
+  readonly isCustomer = computed(() => this.auth.role() === 'CUSTOMER');
+  readonly isStaff = computed(() => this.auth.hasAnyRole('BANK_EMPLOYEE', 'ADMIN'));
+  readonly canMoveMoney = computed(() => this.auth.hasAnyRole('CUSTOMER', 'BANK_EMPLOYEE', 'ADMIN'));
+  readonly canViewFraud = computed(() => this.auth.hasAnyRole('FRAUD_ANALYST', 'ADMIN'));
 
   readonly summary = signal<DashboardSummary | null | undefined>(undefined);
   readonly loading = signal(true);
@@ -423,17 +439,34 @@ export class DashboardComponent implements OnInit {
 
   reload(): void {
     this.loading.set(true);
-    this.dashboardApi.getSummary().subscribe((result) => {
-      this.summary.set(result);
-      this.loading.set(false);
+    this.dashboardApi.getSummary().subscribe({
+      next: (result) => {
+        this.summary.set(result);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.summary.set(null);
+        this.loading.set(false);
+      },
     });
+
+    // Customer-only: the API resolves "my accounts" from the JWT, which only
+    // yields data for a customer-linked user. Staff/fraud see no finances card.
+    if (!this.isCustomer()) {
+      return;
+    }
     // One bounded query per resource; totals derive client-side from the page.
-    // "My money" is always the acting demo customer chosen in Admin.
     this.financesLoading.set(true);
-    this.accountsApi.getMyAccounts().subscribe((accounts) => this.myAccounts.set(accounts));
-    this.transactionsApi.ownHistory(0, 50).subscribe((page) => {
-      this.myTransactions.set(page.content);
-      this.financesLoading.set(false);
+    this.accountsApi.getMyAccounts().subscribe({
+      next: (accounts) => this.myAccounts.set(accounts),
+      error: () => this.myAccounts.set([]),
+    });
+    this.transactionsApi.ownHistory(0, 50).subscribe({
+      next: (page) => {
+        this.myTransactions.set(page.content);
+        this.financesLoading.set(false);
+      },
+      error: () => this.financesLoading.set(false),
     });
   }
 

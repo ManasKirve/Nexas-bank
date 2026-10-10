@@ -1,5 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, defer, of, throwError } from 'rxjs';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 import {
   FraudAlert,
   FraudAlertPage,
@@ -8,143 +10,79 @@ import {
   FraudEvaluation,
   FraudEvaluationPage,
 } from '../../shared/models/fraud.model';
-import { DemoRepositoryService } from './demo-repository.service';
-import { DEMO_ANALYST } from '../data/demo-data';
-import { ERRORS, byNewestFirst, paginate } from './demo-api';
-
-const MAX_PAGE_SIZE = 200;
-
-/** Legal alert transitions, identical to the backend state machine. */
-const NEXT_STATUS: Record<FraudAlertStatus, FraudAlertStatus[]> = {
-  OPEN: ['UNDER_REVIEW'],
-  UNDER_REVIEW: ['RESOLVED', 'FALSE_POSITIVE'],
-  RESOLVED: [],
-  FALSE_POSITIVE: [],
-};
+import { Role } from '../../shared/models/auth.model';
 
 /**
- * Local implementation of the Phase 6 fraud analyst API (`/api/v1/fraud/**`).
+ * Fraud analyst API client (`/api/v1/fraud/**`). FRAUD_ANALYST and ADMIN only.
  *
- * The alert workflow is unchanged: OPEN → UNDER_REVIEW → RESOLVED or
- * FALSE_POSITIVE, and the illegal transitions still fail. Every decision comes
- * from the in-browser `FraudRuleEngine` recorded by the ledger pipeline.
+ * Alert workflow transitions (review → resolve / false-positive) are enforced
+ * by the backend state machine; illegal transitions return 400.
  */
 @Injectable({ providedIn: 'root' })
 export class FraudService {
-  private readonly repo = inject(DemoRepositoryService);
+  private readonly http = inject(HttpClient);
+  private readonly base = environment.apiBaseUrl;
 
   /** Analyst review queue, optionally filtered by status. */
   alerts(status?: FraudAlertStatus | null, page = 0, size = 20): Observable<FraudAlertPage> {
-    return defer(() => {
-      const rows = this.repo
-        .fraudAlerts()
-        .filter((a) => !status || a.status === status)
-        .sort(byNewestFirst<FraudAlert>('createdAt', (a) => a.id));
-      return of(paginate(rows, page, size, MAX_PAGE_SIZE));
-    });
+    let params = this.pageParams(page, size);
+    if (status) {
+      params = params.set('status', status);
+    }
+    return this.http.get<FraudAlertPage>(`${this.base}/api/v1/fraud/alerts`, { params });
   }
 
-  /** One alert with its explainable evaluation context. */
   alert(id: number): Observable<FraudAlert> {
-    return defer(() => {
-      const found = this.repo.fraudAlerts().find((a) => a.id === id);
-      return found ? of(found) : throwError(() => ERRORS.notFound('Fraud alert', id));
-    });
+    return this.http.get<FraudAlert>(`${this.base}/api/v1/fraud/alerts/${id}`);
   }
 
   /** OPEN → UNDER_REVIEW (analyst takes ownership). */
   review(id: number, reason?: string | null): Observable<FraudAlert> {
-    return this.transition(id, 'UNDER_REVIEW', reason);
+    return this.http.post<FraudAlert>(`${this.base}/api/v1/fraud/alerts/${id}/review`, {
+      reason: reason ?? null,
+    });
   }
 
   /** UNDER_REVIEW → RESOLVED (confirmed fraud / handled). */
   resolve(id: number, reason?: string | null): Observable<FraudAlert> {
-    return this.transition(id, 'RESOLVED', reason);
+    return this.http.post<FraudAlert>(`${this.base}/api/v1/fraud/alerts/${id}/resolve`, {
+      reason: reason ?? null,
+    });
   }
 
   /** UNDER_REVIEW → FALSE_POSITIVE (legitimate activity). */
   falsePositive(id: number, reason?: string | null): Observable<FraudAlert> {
-    return this.transition(id, 'FALSE_POSITIVE', reason);
+    return this.http.post<FraudAlert>(`${this.base}/api/v1/fraud/alerts/${id}/false-positive`, {
+      reason: reason ?? null,
+    });
   }
 
   /** Historical evaluations (append-only, newest first). */
-  evaluations(decision?: string | null, page = 0, size = 20): Observable<FraudEvaluationPage> {
-    return defer(() => {
-      const rows = this.repo
-        .fraudEvaluations()
-        .filter((e) => !decision || e.decision === decision)
-        .sort(byNewestFirst<FraudEvaluation>('evaluatedAt', (e) => e.id));
-      return of(paginate(rows, page, size, MAX_PAGE_SIZE));
-    });
+  evaluations(
+    decision?: string | null,
+    page = 0,
+    size = 20,
+  ): Observable<FraudEvaluationPage> {
+    let params = this.pageParams(page, size);
+    if (decision) {
+      params = params.set('decision', decision);
+    }
+    return this.http.get<FraudEvaluationPage>(`${this.base}/api/v1/fraud/evaluations`, { params });
   }
 
-  /** One historical evaluation. */
   evaluation(id: number): Observable<FraudEvaluation> {
-    return defer(() => {
-      const found = this.repo.fraudEvaluations().find((e) => e.id === id);
-      return found ? of(found) : throwError(() => ERRORS.notFound('Fraud evaluation', id));
-    });
+    return this.http.get<FraudEvaluation>(`${this.base}/api/v1/fraud/evaluations/${id}`);
   }
 
   /** Queue counts plus recent high-risk work for the dashboard. */
   dashboard(): Observable<FraudDashboard> {
-    return defer(() => {
-      const alerts = this.repo.fraudAlerts();
-      const evaluations = this.repo.fraudEvaluations();
-      const recent = alerts
-        .slice()
-        .sort(byNewestFirst<FraudAlert>('createdAt', (a) => a.id))
-        .slice(0, 5);
-      return of({
-        openAlerts: alerts.filter((a) => a.status === 'OPEN').length,
-        underReviewAlerts: alerts.filter((a) => a.status === 'UNDER_REVIEW').length,
-        resolvedAlerts: alerts.filter((a) => a.status === 'RESOLVED').length,
-        falsePositiveAlerts: alerts.filter((a) => a.status === 'FALSE_POSITIVE').length,
-        highRiskAlerts: alerts.filter(
-          (a) => a.riskLevel === 'HIGH' || a.riskLevel === 'CRITICAL',
-        ).length,
-        blockedEvaluations: evaluations.filter((e) => e.decision === 'BLOCK').length,
-        reviewEvaluations: evaluations.filter((e) => e.decision === 'REVIEW').length,
-        recentAlerts: recent,
-      });
-    });
+    return this.http.get<FraudDashboard>(`${this.base}/api/v1/fraud/dashboard`);
   }
 
-  private transition(
-    id: number,
-    status: FraudAlertStatus,
-    reason?: string | null,
-  ): Observable<FraudAlert> {
-    return defer(() => {
-      const rows = this.repo.fraudAlerts();
-      const existing = rows.find((a) => a.id === id);
-      if (!existing) {
-        return throwError(() => ERRORS.notFound('Fraud alert', id));
-      }
-      if (!NEXT_STATUS[existing.status].includes(status)) {
-        return throwError(
-          () =>
-            ERRORS.badState(
-              `Alert #${id} cannot move from ${existing.status} to ${status}`,
-            ),
-        );
-      }
-      const note = reason?.trim() ? reason.trim() : existing.reason;
-      const updated: FraudAlert = {
-        ...existing,
-        status,
-        reason: note,
-        reviewedAt: new Date().toISOString(),
-        reviewedBy: DEMO_ANALYST,
-      };
-      this.repo.saveFraudAlerts(rows.map((a) => (a.id === id ? updated : a)));
-      this.repo.appendActivity(
-        'FRAUD_ALERT',
-        `Alert #${id} moved to ${status}`,
-        existing.attemptedReference,
-        note,
-      );
-      return of(updated);
-    });
+  private pageParams(page: number, size: number): HttpParams {
+    return new HttpParams().set('page', String(page)).set('size', String(size));
   }
 }
+
+/** Roles allowed into the fraud console; kept for callers that gate UI. */
+export const FRAUD_ACCESS_ROLES: Role[] = ['FRAUD_ANALYST', 'ADMIN'];

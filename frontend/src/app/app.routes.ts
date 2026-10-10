@@ -11,28 +11,112 @@ import { CustomerDetailComponent } from './features/customers/customer-detail.co
 import { AccountListComponent } from './features/accounts/account-list.component';
 import { AccountCreateComponent } from './features/accounts/account-create.component';
 import { AccountDetailComponent } from './features/accounts/account-detail.component';
+import { LoginComponent } from './features/auth/login.component';
+import { SignupComponent } from './features/auth/signup.component';
+import { authGuard, roleGuard } from './core/guards/auth.guard';
+import { Role } from './shared/models/auth.model';
+
+/** Staff roles that may run customer/account management and money movement. */
+const STAFF: Role[] = ['BANK_EMPLOYEE', 'ADMIN'];
+/** Roles allowed to move money (fraud analysts are deliberately excluded). */
+const MONEY_MOVERS: Role[] = ['CUSTOMER', 'BANK_EMPLOYEE', 'ADMIN'];
+/** Roles allowed into the fraud monitoring console. */
+const FRAUD_ROLES: Role[] = ['FRAUD_ANALYST', 'ADMIN'];
 
 /**
- * Every screen is open in local demo mode.
+ * Route table with authentication and role-based access control.
  *
- * The auth/role guards and the login/register routes are gone: there is no
- * session to check, so the `data.roles` metadata that used to sit on each route
- * no longer has anything to enforce it and has been removed rather than left as
- * dead configuration. `''` goes straight to the dashboard.
+ * `authGuard` requires a valid JWT; `roleGuard` additionally checks the
+ * `data.roles` list. Both mirror the backend's `SecurityConfig`, which remains
+ * the real boundary — hiding routes is convenience, not security.
  */
 export const routes: Routes = [
+  { path: 'login', component: LoginComponent, title: 'NexaBank — Sign in' },
+  { path: 'signup', component: SignupComponent, title: 'NexaBank — Create account' },
+
+  {
+    path: 'dashboard',
+    component: DashboardComponent,
+    title: 'NexaBank — Dashboard',
+    canActivate: [authGuard],
+  },
+  {
+    path: 'customers',
+    component: CustomerListComponent,
+    title: 'NexaBank — Customers',
+    canActivate: [roleGuard],
+    data: { roles: STAFF },
+  },
+  {
+    path: 'customers/new',
+    component: CustomerCreateComponent,
+    title: 'NexaBank — New customer',
+    canActivate: [roleGuard],
+    data: { roles: STAFF },
+  },
+  {
+    path: 'customers/:id',
+    component: CustomerDetailComponent,
+    title: 'NexaBank — Customer detail',
+    canActivate: [roleGuard],
+    data: { roles: STAFF },
+  },
+  {
+    path: 'accounts',
+    component: AccountListComponent,
+    title: 'NexaBank — Accounts',
+    canActivate: [roleGuard],
+    data: { roles: STAFF },
+  },
+  {
+    path: 'accounts/new',
+    component: AccountCreateComponent,
+    title: 'NexaBank — Open account',
+    canActivate: [roleGuard],
+    data: { roles: STAFF },
+  },
+  {
+    path: 'accounts/:id',
+    component: AccountDetailComponent,
+    title: 'NexaBank — Account detail',
+    canActivate: [authGuard],
+  },
+  {
+    path: 'transactions',
+    component: TransactionsComponent,
+    title: 'NexaBank — Transactions',
+    canActivate: [roleGuard],
+    data: { roles: MONEY_MOVERS },
+  },
+  {
+    path: 'transfers',
+    component: TransfersComponent,
+    title: 'NexaBank — Transfers',
+    canActivate: [roleGuard],
+    data: { roles: MONEY_MOVERS },
+  },
+  {
+    path: 'fraud',
+    component: FraudComponent,
+    title: 'NexaBank — Fraud Monitoring',
+    canActivate: [roleGuard],
+    data: { roles: FRAUD_ROLES },
+  },
+  {
+    path: 'fraud/:id',
+    component: FraudAlertDetailComponent,
+    title: 'NexaBank — Fraud Alert Detail',
+    canActivate: [roleGuard],
+    data: { roles: FRAUD_ROLES },
+  },
+  {
+    path: 'admin',
+    component: AdminComponent,
+    title: 'NexaBank — Admin',
+    canActivate: [roleGuard],
+    data: { roles: ['ADMIN'] },
+  },
+
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
-  { path: 'dashboard', component: DashboardComponent, title: 'NexaBank — Dashboard' },
-  { path: 'customers', component: CustomerListComponent, title: 'NexaBank — Customers' },
-  { path: 'customers/new', component: CustomerCreateComponent, title: 'NexaBank — New customer' },
-  { path: 'customers/:id', component: CustomerDetailComponent, title: 'NexaBank — Customer detail' },
-  { path: 'accounts', component: AccountListComponent, title: 'NexaBank — Accounts' },
-  { path: 'accounts/new', component: AccountCreateComponent, title: 'NexaBank — Open account' },
-  { path: 'accounts/:id', component: AccountDetailComponent, title: 'NexaBank — Account detail' },
-  { path: 'transactions', component: TransactionsComponent, title: 'NexaBank — Transactions' },
-  { path: 'transfers', component: TransfersComponent, title: 'NexaBank — Transfers' },
-  { path: 'fraud', component: FraudComponent, title: 'NexaBank — Fraud Monitoring' },
-  { path: 'fraud/:id', component: FraudAlertDetailComponent, title: 'NexaBank — Fraud Alert Detail' },
-  { path: 'admin', component: AdminComponent, title: 'NexaBank — Admin' },
   { path: '**', redirectTo: 'dashboard' },
 ];

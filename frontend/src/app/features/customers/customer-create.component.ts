@@ -136,7 +136,7 @@ export function readError(err: HttpErrorResponse): string {
     return body.message;
   }
   if (err.status === 0) {
-    return 'LocalStorage is unavailable, so changes cannot be saved. Check your browser privacy settings.';
+    return 'Cannot reach the backend. Make sure the NexaBank API is running and reachable.';
   }
   return `Request failed (HTTP ${err.status}).`;
 }

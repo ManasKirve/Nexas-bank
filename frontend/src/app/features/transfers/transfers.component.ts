@@ -205,9 +205,15 @@ export class TransfersComponent implements OnInit {
 
   reload(): void {
     this.loading.set(true);
-    // Transfers act on the demo customer's own accounts — the acting customer
-    // chosen in Admin, where the JWT-derived ownership used to come from.
-    this.accountsApi.getMyAccounts().subscribe((accounts) => this.accounts.set(accounts));
+    // Transfers act on the signed-in customer's own accounts; ownership is
+    // derived by the backend from the JWT.
+    this.accountsApi.getMyAccounts().subscribe({
+      next: (accounts) => this.accounts.set(accounts),
+      error: (err: HttpErrorResponse) => {
+        this.beneficiaryError.set(readError(err));
+        this.loading.set(false);
+      },
+    });
     this.beneficiariesApi.list().subscribe({
       next: (list) => {
         this.beneficiaries.set(list);

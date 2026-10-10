@@ -1,96 +1,99 @@
-# NexaBank — Frontend (LocalStorage Demo)
+# NexaBank — Frontend (Angular SPA)
 
-This is the **only** part of NexaBank you need to run. It is a standalone
-Angular application: all data lives in your browser's LocalStorage.
+Angular 22 standalone application for NexaBank. It is the UI layer of the
+full-stack platform and talks to the Spring Boot API over REST with a JWT
+session.
 
-You do **not** need Docker, PostgreSQL, the Spring Boot backend, `JWT_SECRET`,
-a login, or a signup.
+```
+Angular  →  JWT (Bearer)  →  Spring Boot REST API  →  PostgreSQL
+```
+
+You need the backend and its infrastructure running. See the root `README.md`.
 
 ## Run it
 
 ```bash
+# 1. infrastructure + backend (from the repo root)
+docker compose up -d
+cd ../backend && mvn spring-boot:run -Dspring-boot.run.profiles=dev
+
+# 2. frontend
 cd frontend
 npm install
-npm start
+npm start          # ng serve → http://localhost:4200
 ```
 
-Then open <http://localhost:4200/>. The app opens straight on the Dashboard.
-
-Production build:
+Production build and tests:
 
 ```bash
 npm run build
-```
-
-Unit tests:
-
-```bash
 npm test
 ```
 
-## How this app is different from the original
+Sign in with a seeded dev user (password `Password123!`):
+`customer1`, `employee1`, `fraud1`, or `admin1`.
 
-The Docker build was `Angular → JWT → Spring Boot → PostgreSQL`. Authentication
-has been removed on purpose for this local demo, so the app is now:
+## Configuration
 
-```
-Angular → LocalStorage
-```
+The API origin is set in `src/environments/`:
 
-Concretely:
+| File | Used by | `apiBaseUrl` |
+|---|---|---|
+| `environment.development.ts` | `ng serve` | `http://localhost:8080` |
+| `environment.ts` | production build | `http://localhost:8080` |
 
-- no login, signup, logout, token, or fake user;
-- no `authGuard` / `roleGuard` — every screen is reachable;
-- no `Authorization` header, because there is no server to send it to;
-- no `HttpClient` at runtime; the feature services talk to LocalStorage and
-  still return `Observable`s, failing with `HttpErrorResponse`s carrying the
-  original status codes (400, 404, 409, 422);
-- the dashboard "Data Source" badge now reports whether LocalStorage is ready
-  instead of whether the API is reachable.
+Point `apiBaseUrl` at your deployed API when building for another environment.
+The backend must allow the SPA origin via `CORS_ALLOWED_ORIGINS`.
 
-**Admin → Acting demo customer** selects whose money the "my accounts", "my
-transactions" and "beneficiaries" screens show. It is a data filter, not a
-session — it is how the app knows whose ledger to read now that there is no JWT
-to derive ownership from.
+## Architecture
 
-## Data layer
+### Auth & access control
 
-All persistence goes through one gateway,
-`src/app/core/services/local-storage.service.ts`. No component or feature
-service touches `localStorage` directly.
+- `core/services/auth.service.ts` — owns the session: `login`, `register`,
+  `me`, `logout`, and the `user` / `isAuthenticated` / `role` signals. The JWT
+  and safe user profile persist under `nexabank_access_token` and
+  `nexabank_current_user`; no banking data is stored client-side.
+- `core/interceptors/auth.interceptor.ts` — adds `Authorization: Bearer …` to
+  API calls and redirects to `/login?returnUrl=…` on `401`.
+- `core/guards/auth.guard.ts` — `authGuard` (session required) and `roleGuard`
+  (checks `route.data.roles`). These mirror the backend’s `@PreAuthorize`
+  rules; the server is the real boundary.
 
-| Key | Contents |
+### Routes
+
+`app.routes.ts` declares public `login`/`signup` and guards every other route
+with the appropriate roles:
+
+| Route | Allowed roles |
 |---|---|
-| `nexabank_customers` | Customer records |
-| `nexabank_accounts` | Accounts with running balances |
-| `nexabank_transactions` | Ledger: deposits, withdrawals, both transfer legs |
-| `nexabank_beneficiaries` | Payees owned by the acting customer |
-| `nexabank_fraud_alerts` | Alert queue and workflow state |
-| `nexabank_fraud_evaluations` | Every engine decision, including approvals |
-| `nexabank_audit_log` | Demo activity trail |
-| `nexabank_active_customer_id` | The acting demo customer |
+| `/dashboard`, `/accounts/:id` | any authenticated |
+| `/accounts`, `/accounts/new`, `/customers*` | `BANK_EMPLOYEE`, `ADMIN` |
+| `/transactions`, `/transfers` | `CUSTOMER`, `BANK_EMPLOYEE`, `ADMIN` |
+| `/fraud`, `/fraud/:id` | `FRAUD_ANALYST`, `ADMIN` |
+| `/admin` | `ADMIN` |
 
-The dataset is seeded **once**, on first launch only (guarded by
-`nexabank_demo_initialized` and a schema version). Later launches and browser
-refreshes never overwrite what you did. **Admin → Reset Demo Data** wipes and
-re-seeds on demand.
+### Services
 
-## Banking operations
+Feature services in `core/services/` are thin `HttpClient` wrappers that keep
+the REST contracts and `Observable` return types the components expect:
 
-Deposit, withdrawal, transfer, beneficiary create/disable, transaction history
-and balance updates all run against LocalStorage. Every movement passes through
-one fraud gate before any balance moves, and a held movement writes no ledger
-row and raises an alert instead.
+| Service | Endpoints |
+|---|---|
+| `AuthService` | `/api/v1/auth/*` |
+| `CustomerService` | `/api/v1/customers`, `/customers/me`, `/customers/{id}/accounts` |
+| `AccountService` | `/api/v1/accounts`, `/accounts/me`, `/accounts/{id}/status` |
+| `TransactionService` | deposits, withdrawals, per-account and own history |
+| `TransferService` | `/api/v1/transfers` |
+| `BeneficiaryService` | `/api/v1/beneficiaries` |
+| `DashboardService` | `/api/v1/dashboard/summary` |
+| `FraudService` | `/api/v1/fraud/**` |
+| `HealthService` | `/api/v1/health` |
 
-## About `../backend`
+`HttpErrorResponse` surfaces the backend’s status codes (400, 401, 403, 404,
+409, 422) and its `ApiError` body (`message`, `errors`), which the components
+render via the shared `readError()` helper.
 
-`../backend` is the original Spring Boot + PostgreSQL implementation, kept
-**untouched as reference**. It documents the production architecture this demo
-imitates: layered monolith, JPA entities, bean validation, audit hooks, the
-authoritative fraud engine, stateless JWT security, and the REST contracts the
-Angular services still mirror.
+### Dashboard “Data Source” badge
 
-It is not required, and the frontend never calls it. If you ever choose to run
-it yourself it still expects its own infrastructure (`JWT_SECRET`, PostgreSQL,
-etc.) — that is intentional, so the reference build stays faithful to the
-production design.
+`shared/components/backend-status/` probes `GET /api/v1/health` and shows
+`API online`, `Checking…`, or `Unavailable`.

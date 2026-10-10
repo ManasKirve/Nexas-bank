@@ -1,24 +1,18 @@
 import {
   ApplicationConfig,
-  inject,
-  provideAppInitializer,
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
 import { provideRouter } from '@angular/router';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { routes } from './app.routes';
-import { DemoRepositoryService } from './core/services/demo-repository.service';
+import { authInterceptor } from './core/interceptors/auth.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
-    /**
-     * Seeds the LocalStorage dataset before the first route renders, so every
-     * screen finds data already in place. Existing data is never overwritten —
-     * only the very first launch seeds.
-     */
-    provideAppInitializer(() => {
-      inject(DemoRepositoryService).initialize();
-    }),
+    // Authenticated REST calls to the Spring Boot backend. The interceptor
+    // attaches the JWT and redirects to /login on a 401.
+    provideHttpClient(withInterceptors([authInterceptor])),
   ],
 };

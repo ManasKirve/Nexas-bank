@@ -1,32 +1,27 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, map, of } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { Observable, catchError, map, of } from 'rxjs';
+import { environment } from '../../../environments/environment';
 import { BackendHealth } from '../../shared/models/backend-health.model';
-import { DemoRepositoryService } from './demo-repository.service';
 
 export type BackendConnectionState = 'checking' | 'connected' | 'unavailable';
 
 /**
- * Data-source probe, replacing the Phase 1 `GET /api/v1/health` call.
+ * Connectivity probe against `GET /api/v1/health`.
  *
- * There is no backend in local demo mode, so the "is it working?" question
- * becomes "is LocalStorage usable and is the dataset seeded?". The component
- * and its `connected` / `unavailable` states are unchanged — only the meaning
- * is now "LocalStorage ready" instead of "Spring Boot reachable".
+ * The endpoint is public, so this also works before sign-in. A failed request
+ * maps to `unavailable` instead of erroring, which keeps the status widget's
+ * three states unchanged.
  */
 @Injectable({ providedIn: 'root' })
 export class HealthService {
-  private readonly repo = inject(DemoRepositoryService);
+  private readonly http = inject(HttpClient);
+  private readonly base = environment.apiBaseUrl;
 
-  /** `status: 'UP'` when the local store is ready, so existing checks still pass. */
   checkHealth(): Observable<BackendHealth | null> {
-    if (!this.repo.storageAvailable() || !this.repo.isSeeded()) {
-      return of(null);
-    }
-    return of({
-      status: 'UP',
-      service: 'NexaBank LocalStorage Demo',
-      timestamp: new Date().toISOString(),
-    });
+    return this.http
+      .get<BackendHealth>(`${this.base}/api/v1/health`)
+      .pipe(catchError(() => of(null)));
   }
 
   connectionState(): Observable<BackendConnectionState> {

@@ -4,80 +4,117 @@
 > application for learning and interview preparation. It does **not** reproduce
 > any real bank's proprietary systems, APIs, or business rules.
 
-## Running it — local demo mode
+A full-stack banking platform:
 
-The Angular app runs **entirely in the browser against LocalStorage**. There is
-no backend, no database, no Docker, and no login.
-
-```powershell
-cd nexa-bank/frontend
-npm install --legacy-peer-deps   # legacy flag works around an npm 10.7 peer bug; .npmrc sets it by default
-npm start                         # ng serve → http://localhost:4200
+```
+Angular 22 SPA  →  JWT (Bearer)  →  Spring Boot 4 REST API  →  PostgreSQL 17
+                                        │
+                                        ├── Redis   (cache / rate limiting)
+                                        └── Kafka   (async domain events, outbox)
 ```
 
-Open `http://localhost:4200` — it redirects to the dashboard.
+Authentication is stateless JWT with role-based access control. The backend is
+the authorization boundary; the SPA enforces the same roles for navigation and
+UX only.
 
-On the **first launch only**, the app seeds a realistic dataset: 5 customers,
-8 accounts, beneficiaries, a full transaction ledger, and a fraud queue whose
-alerts are produced by the real rule engine rather than typed in. Data persists
-across refreshes and browser restarts.
+## Running it
 
-To wipe and re-seed at any time, open **Admin → Reset Demo Data** (asks for
-confirmation first).
+### Prerequisites
 
-### What replaced authentication
+- **Node 20.19+/22.12+ (24 OK)** and npm (Angular CLI 22 runs via `npx`)
+- **Java 17** and **Maven 3.9+**
+- **Docker Desktop** (for PostgreSQL/Redis/Kafka)
 
-The Docker build required a JWT session, and each route declared which roles
-could reach it. Local demo mode has removed that layer outright rather than
-simulating it:
+### 1. Start infrastructure
 
-- no login, registration, logout, token, or fake user;
-- no `authGuard` / `roleGuard`, so every screen is reachable;
-- no `Authorization` header, because there is no server to send it to;
-- **Admin → Acting demo customer** selects whose money the "my accounts",
-  "my transactions" and "beneficiaries" screens show. It is a data filter, not
-  a session, and it is how the app knows whose ledger to read now that there is
-  no JWT to derive ownership from.
+```powershell
+cd nexa-bank
+Copy-Item .env.example .env      # gitignored; adjust locally if you like
+docker compose up -d             # postgres + redis + kafka
+docker compose ps                # wait for postgres/redis to be healthy
+```
 
-## Data layer
+### 2. Start the backend (API on :8080)
 
-All persistence goes through one gateway, `core/services/local-storage.service.ts`.
-No component or feature service touches `localStorage` directly.
+```powershell
+cd backend
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+```
 
-| File | Role |
+The `dev` profile seeds four users (password `Password123!` unless
+`NEXABANK_DEV_SEED_PASSWORD` is set):
+
+| Username | Role | Can reach |
+|---|---|---|
+| `customer1` | `CUSTOMER` | Dashboard (own balances), Transactions, Transfers |
+| `employee1` | `BANK_EMPLOYEE` | + Customers, Accounts management |
+| `fraud1` | `FRAUD_ANALYST` | + Fraud monitoring console |
+| `admin1` | `ADMIN` | Everything, including Admin |
+
+**JWT secret.** The backend signs tokens with `JWT_SECRET` (HS256, ≥ 32 bytes).
+Local `dev` falls back to an insecure built-in key; **production must set the
+env var** or startup fails fast with *“JWT secret is not configured.”* Generate
+one with `openssl rand -base64 48` and never commit it.
+
+### 3. Start the frontend (SPA on :4200)
+
+```powershell
+cd frontend
+npm install        # .npmrc sets --legacy-peer-deps to work around an npm 10.7 peer bug
+npm start          # ng serve → http://localhost:4200
+```
+
+Open `http://localhost:4200`. You are redirected to `/login`; sign in with one
+of the seeded users above. The app talks to the API at
+`environment.apiBaseUrl` (`http://localhost:8080`).
+
+## How authentication works
+
+- **Login / signup** (`/login`, `/signup`) post to `/api/v1/auth/login` and
+  `/api/v1/auth/register`. Registration always creates a `CUSTOMER`; privileged
+  roles are assigned server-side, never by the client.
+- The JWT and the safe user profile are stored under `nexabank_access_token`
+  and `nexabank_current_user` (session data only — no banking data in storage).
+- `authInterceptor` attaches `Authorization: Bearer <token>` to every request
+  aimed at the API and, on a `401`, clears the session and redirects to
+  `/login?returnUrl=…`.
+- `authGuard` requires a session; `roleGuard` additionally checks the route’s
+  `data.roles`. Both mirror the backend’s `@PreAuthorize` rules.
+
+### Route access (RBAC)
+
+| Route | Allowed roles |
 |---|---|
-| `local-storage.service.ts` | The only `localStorage` caller: typed reads/writes, key registry, availability probing, size reporting |
-| `demo-repository.service.ts` | Collection-level accessors, seeding, reset, acting-customer selection, activity trail |
-| `ledger.service.ts` | The money-movement pipeline shared by deposits, withdrawals and transfers |
-| `fraud-rule-engine.service.ts` | Port of the backend's six fraud rules, thresholds and score bands |
-| `demo-data.ts` | The deterministic seed dataset |
-| `demo-api.ts` | Helpers: money rounding, references, paging, `HttpErrorResponse`-shaped errors |
+| `/dashboard`, `/accounts/:id` | any authenticated user |
+| `/accounts`, `/accounts/new`, `/customers*` | `BANK_EMPLOYEE`, `ADMIN` |
+| `/transactions`, `/transfers` | `CUSTOMER`, `BANK_EMPLOYEE`, `ADMIN` |
+| `/fraud`, `/fraud/:id` | `FRAUD_ANALYST`, `ADMIN` |
+| `/admin` | `ADMIN` |
 
-The feature services (`CustomerService`, `AccountService`, `TransactionService`,
-`TransferService`, `BeneficiaryService`, `FraudService`, `DashboardService`,
-`HealthService`) keep the exact method signatures and `Observable` return types
-they had when they called the REST API, and still fail with
-`HttpErrorResponse` carrying the original business status codes (400, 404, 409,
-422). That is why the components' existing error handling works unchanged.
+The server enforces these regardless of the client, so hiding a route is
+convenience, not security.
 
-### Storage keys
+## REST API surface
 
-| Key | Contents |
+| Area | Base path |
 |---|---|
-| `nexabank_customers` | Customer records |
-| `nexabank_accounts` | Account records with running balances |
-| `nexabank_transactions` | Immutable ledger, deposits, withdrawals and both transfer legs |
-| `nexabank_beneficiaries` | Payees owned by the acting customer |
-| `nexabank_fraud_alerts` | Alert queue and its workflow state |
-| `nexabank_fraud_evaluations` | Every engine decision, including approvals |
-| `nexabank_audit_log` | Demo activity trail |
-| `nexabank_active_customer_id` | The acting demo customer |
-| `nexabank_demo_initialized` / `nexabank_demo_schema_version` | Seeding sentinel and schema version |
+| Auth | `/api/v1/auth` (`register`, `login`, `me`) |
+| Customers | `/api/v1/customers`, `/api/v1/customers/me`, `/customers/{id}/accounts` |
+| Accounts | `/api/v1/accounts`, `/accounts/me`, `/accounts/{id}/status` |
+| Transactions | `/api/v1/accounts/{id}/deposits`, `.../withdrawals`, `.../transactions`, `/accounts/me/transactions` |
+| Transfers | `/api/v1/transfers` |
+| Beneficiaries | `/api/v1/beneficiaries` |
+| Dashboard | `/api/v1/dashboard/summary` |
+| Fraud | `/api/v1/fraud/alerts`, `/evaluations`, `/dashboard` |
+| Health | `/api/v1/health` (public) |
 
-## Fraud rules
+Money-movement endpoints require a client-generated `idempotencyKey` so a
+retried request cannot double-post.
 
-`fraud-rule-engine.service.ts` is a direct port of the backend engine and its
-six rules, with the same `FraudProperties` defaults:
+## Fraud engine
+
+The backend engine is authoritative; the console only reviews its output.
+Six deterministic rules run before money moves:
 
 | Rule | Trigger | Score |
 |---|---|---|
@@ -93,104 +130,52 @@ six rules, with the same `FraudProperties` defaults:
 
 A `REVIEW` or `BLOCK` decision **holds** the movement: no ledger row is written,
 no balance changes, and a fraud alert is raised instead. The alert workflow
-(`OPEN → UNDER_REVIEW → RESOLVED | FALSE_POSITIVE`) enforces the same legal
-transitions as the backend.
-
-## Backend — kept as the enterprise reference
-
-`backend/` is the original Spring Boot + PostgreSQL implementation. It is
-**untouched and no longer required** to run the frontend, but it is kept
-because it documents the production architecture this demo imitates: layered
-monolith, JPA entities, bean validation, audit hooks, the authoritative fraud
-engine, and the REST contracts the Angular services still mirror.
-
-Its JWT security stack (`JwtService`, `JwtAuthenticationFilter`,
-`DbUserDetailsService`, `AuthController`) is deliberately left in place, because
-stateless JWT + RBAC is part of what the reference is meant to teach. That is
-also why the demo never starts it: starting that build independently still
-requires its own `JWT_SECRET` and PostgreSQL, and will fail with
-`JWT secret is not configured` until you provide them. **That message cannot
-appear in local demo mode, because the demo does not start the backend at all.**
-Nothing in `frontend/` imports, calls, or requires the backend.
-
-```powershell
-# Only if you want to explore the reference implementation
-cd nexa-bank
-Copy-Item .env.example .env
-docker compose up -d postgres
-cd backend
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
-```
-
-`docs/architecture.md`, `docs/api-design.md` and `docs/database-design.md`
-describe that server-side design.
-
-## Project purpose
-
-Learn and demonstrate realistic enterprise banking engineering: layered Spring
-Boot monolith, Angular SPA, PostgreSQL, audit/fraud hooks, and clean REST
-contracts — plus a dependency-free local mode that lets the whole product be
-explored in a browser.
+(`OPEN → UNDER_REVIEW → RESOLVED | FALSE_POSITIVE`) enforces the legal
+transitions on the server.
 
 ## Technology stack
 
 | Layer | Choice |
 |---|---|
-| Frontend (runs standalone) | Angular 22, TypeScript, standalone components, Router, Reactive Forms, Signals, **LocalStorage** |
-| Backend (reference only) | Java 17, Spring Boot 4.1.1, Maven, Web / Data JPA / Validation / Actuator / Security, PostgreSQL driver, JUnit 5 + Mockito-ready, H2 (tests only) |
-| Database (reference only) | PostgreSQL 17 (Docker) |
-| Infra (reference only) | docker-compose (Postgres) |
-
-The frontend no longer uses `HttpClient`: `HttpClient` and the auth/API
-interceptors were removed with the REST layer, and `environment.apiBaseUrl` is
-gone.
+| Frontend | Angular 22, TypeScript, standalone components, Router (guards), Reactive Forms, Signals, `HttpClient` + interceptors |
+| Backend | Java 17, Spring Boot 4.1.1, Maven, Web / Data JPA / Validation / Actuator / Security, JWT, PostgreSQL driver, JUnit 5 |
+| Database | PostgreSQL 17 (Docker) |
+| Infra | docker-compose (PostgreSQL + Redis + Kafka) |
 
 ## Folder structure
 
 ```
 nexa-bank/
-  backend/            # Spring Boot (com.nexabank) — reference, not required
+  backend/            # Spring Boot (com.nexabank)
     src/main/java/com/nexabank/
-      NexaBankApplication.java
       config/ controller/ service/ repository/ entity/ dto/
       exception/ security/ audit/ fraud/ transaction/
     src/main/resources/
       application.yml application-dev.yml application-prod.yml
     src/test/...
     pom.xml
-  frontend/           # Angular 22 standalone — this is what you run
+  frontend/           # Angular 22 standalone SPA
     src/app/
       core/
-        data/         # demo-data.ts (seed dataset)
-        services/     # local-storage, demo-repository, ledger,
-                      # fraud-rule-engine, demo-api + feature services
+        guards/       # authGuard, roleGuard
+        interceptors/ # authInterceptor (Bearer + 401 handling)
+        services/     # HttpClient feature services + AuthService
       shared/         # reusable UI, models, utils
       features/       # dashboard accounts transactions transfers
-                      # fraud customers admin
-      app.ts          # root component
-      app.routes.ts   # unguarded — every screen is open
-    src/environments/ # environment.ts + environment.development.ts
+                      # fraud customers auth admin
+      app.routes.ts   # public login/signup + guarded routes (data.roles)
+      app.config.ts   # provideRouter + provideHttpClient(withInterceptors)
+    src/environments/ # environment.ts + environment.development.ts (apiBaseUrl)
   docs/               # architecture.md api-design.md database-design.md
-  docker-compose.yml  # PostgreSQL — reference only
+  docker-compose.yml  # PostgreSQL + Redis + Kafka
   .env.example
   .gitignore
   README.md
 ```
 
-## Prerequisites
-
-For local demo mode: **Node 20.19+/22.12+ (24 OK), npm, Angular CLI 22 (via
-`npx`)**. That is the entire list.
-
-For the backend reference implementation only: additionally Java 17, Maven 3.9+,
-and Docker Desktop.
-
 ## Environment variables
 
-None for local demo mode — the data lives in the browser, so there is nothing
-to configure.
-
-For the backend reference implementation:
+Copy `.env.example` to `.env` (gitignored). Backend-relevant vars:
 
 | Var | Used by | Default |
 |---|---|---|
@@ -199,27 +184,29 @@ For the backend reference implementation:
 | `DATABASE_PASSWORD` | backend | `nexabank` |
 | `SPRING_PROFILES_ACTIVE` | backend | `dev` locally |
 | `CORS_ALLOWED_ORIGINS` | backend | `http://localhost:4200` |
+| `JWT_SECRET` | backend | insecure dev fallback; **required in prod** |
+| `JWT_EXPIRATION_MS` | backend | `3600000` (1 h) |
 | `POSTGRES_DB/USER/PASSWORD` | compose | `nexabank/nexabank/nexabank` |
+| `REDIS_*`, `KAFKA_*`, `APP_*` | backend | see `.env.example` |
 
-Never commit real secrets — copy `.env.example` to `.env` (gitignored).
+Never commit real secrets — `.env` is gitignored.
+
+The frontend’s API origin lives in `frontend/src/environments/environment*.ts`
+(`apiBaseUrl`).
 
 ## Development workflow
 
-1. `cd frontend && npm install && npm start` — explore the local demo.
-2. `cd backend && mvn test && mvn spring-boot:run` — only when working on the
-   reference server.
-3. Keep the local demo and the backend contracts in step: when a service method
-   or error status changes, change it in both.
-4. Document API/schema changes in `docs/`.
+1. `docker compose up -d` then `cd backend && mvn spring-boot:run -Dspring-boot.run.profiles=dev`.
+2. `cd frontend && npm install && npm start`.
+3. Backend: `mvn test`. Frontend: `npm test`.
+4. Keep the Angular service layer and the backend REST contracts in step.
+5. Document API/schema changes in `docs/`.
 
 ## Module status
 
-Done: Customer management, Account management, Transactions, Transfers,
-Beneficiaries, Fraud detection, Risk scoring, Fraud alerts, Audit logging,
-Admin dashboard.
-
-Removed for local demo mode: Authentication / JWT security (no session exists
-to protect a browser-only store).
+Done: Authentication (JWT + RBAC), Customer management, Account management,
+Transactions, Transfers, Beneficiaries, Fraud detection, Risk scoring, Fraud
+alerts, Audit logging, Admin dashboard.
 
 Not started: Payments, Notifications, Reporting, Observability, production
-Security.
+hardening.

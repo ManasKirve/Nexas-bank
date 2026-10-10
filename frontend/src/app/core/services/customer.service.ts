@@ -1,146 +1,48 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, of, throwError } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 import {
   CreateCustomerRequest,
   Customer,
   UpdateCustomerRequest,
 } from '../../shared/models/customer.model';
-import { DemoRepositoryService } from './demo-repository.service';
-import { ERRORS, demoValidationError } from './demo-api';
 
 /**
- * Customer directory, served from the local demo store.
+ * Customer directory API client (`/api/v1/customers`).
  *
- * The observable contract and the validation rules are unchanged from the
- * `/api/v1/customers` client — only the storage moved from PostgreSQL to the
- * browser. Failures still arrive as `HttpErrorResponse`s (404, 409, 400) so
- * the components render errors exactly as before.
+ * Management operations (list/create/update/deactivate) require BANK_EMPLOYEE
+ * or ADMIN; `/customers/me` returns the authenticated customer's own profile.
+ * The backend remains the authorization boundary.
  */
 @Injectable({ providedIn: 'root' })
 export class CustomerService {
-  private readonly repo = inject(DemoRepositoryService);
+  private readonly http = inject(HttpClient);
+  private readonly base = environment.apiBaseUrl;
 
   getAll(): Observable<Customer[]> {
-    return of(this.repo.customers());
+    return this.http.get<Customer[]>(`${this.base}/api/v1/customers`);
   }
 
   getById(id: number): Observable<Customer> {
-    const found = this.repo.customers().find((c) => c.id === id);
-    return found ? of(found) : throwError(() => ERRORS.notFound('Customer', id));
+    return this.http.get<Customer>(`${this.base}/api/v1/customers/${id}`);
   }
 
-  /** The demo customer the "my profile" views act for. */
+  /** The authenticated customer's own profile (JWT-derived identity). */
   getMyProfile(): Observable<Customer> {
-    const id = this.repo.activeCustomerId();
-    return this.getById(id);
+    return this.http.get<Customer>(`${this.base}/api/v1/customers/me`);
   }
 
   create(request: CreateCustomerRequest): Observable<Customer> {
-    const invalid = validate(request);
-    if (invalid) {
-      return throwError(() => demoValidationError(invalid));
-    }
-    const rows = this.repo.customers();
-    if (rows.some((c) => c.email.toLowerCase() === request.email.trim().toLowerCase())) {
-      return throwError(() => ERRORS.duplicate('Email ' + request.email + ' is already registered'));
-    }
-    const now = new Date().toISOString();
-    const created: Customer = {
-      id: this.nextId(rows),
-      customerNumber: this.nextCustomerNumber(rows),
-      firstName: request.firstName.trim(),
-      lastName: request.lastName.trim(),
-      email: request.email.trim(),
-      phone: request.phone?.trim() ? request.phone.trim() : null,
-      status: 'ACTIVE',
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.repo.saveCustomers([...rows, created]);
-    this.repo.appendActivity('CUSTOMER', `Customer ${created.customerNumber} created`, null, created.email);
-    return of(created);
+    return this.http.post<Customer>(`${this.base}/api/v1/customers`, request);
   }
 
   update(id: number, request: UpdateCustomerRequest): Observable<Customer> {
-    const invalid = validate(request);
-    if (invalid) {
-      return throwError(() => demoValidationError(invalid));
-    }
-    const rows = this.repo.customers();
-    const existing = rows.find((c) => c.id === id);
-    if (!existing) {
-      return throwError(() => ERRORS.notFound('Customer', id));
-    }
-    if (rows.some((c) => c.id !== id && c.email.toLowerCase() === request.email.trim().toLowerCase())) {
-      return throwError(() => ERRORS.duplicate('Email ' + request.email + ' is already registered'));
-    }
-    const updated: Customer = {
-      ...existing,
-      firstName: request.firstName.trim(),
-      lastName: request.lastName.trim(),
-      email: request.email.trim(),
-      phone: request.phone?.trim() ? request.phone.trim() : null,
-      updatedAt: new Date().toISOString(),
-    };
-    this.repo.saveCustomers(rows.map((c) => (c.id === id ? updated : c)));
-    return of(updated);
+    return this.http.put<Customer>(`${this.base}/api/v1/customers/${id}`, request);
   }
 
-  /** Soft delete, exactly as the backend did: flip to INACTIVE, keep the row. */
+  /** Soft delete: the backend flips the customer to INACTIVE. */
   deactivate(id: number): Observable<Customer> {
-    const rows = this.repo.customers();
-    const existing = rows.find((c) => c.id === id);
-    if (!existing) {
-      return throwError(() => ERRORS.notFound('Customer', id));
-    }
-    const updated: Customer = { ...existing, status: 'INACTIVE', updatedAt: new Date().toISOString() };
-    this.repo.saveCustomers(rows.map((c) => (c.id === id ? updated : c)));
-    this.repo.appendActivity(
-      'CUSTOMER',
-      `Customer ${updated.customerNumber} deactivated`,
-      null,
-      null,
-    );
-    return of(updated);
+    return this.http.delete<Customer>(`${this.base}/api/v1/customers/${id}`);
   }
-
-  private nextId(rows: Customer[]): number {
-    return rows.reduce((max, c) => Math.max(max, c.id), 0) + 1;
-  }
-
-  /** Mirrors the backend's `CUST-100001` sequence. */
-  private nextCustomerNumber(rows: Customer[]): string {
-    const highest = rows.reduce((max, c) => {
-      const parsed = Number(c.customerNumber.replace('CUST-', ''));
-      return Number.isFinite(parsed) ? Math.max(max, parsed) : max;
-    }, 100_000);
-    return `CUST-${highest + 1}`;
-  }
-}
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_PATTERN = /^[+()\-\s\d]{7,32}$/;
-
-/** Field-level checks mirroring the bean validation on the backend DTOs. */
-function validate(request: CreateCustomerRequest): Record<string, string> | null {
-  const errors: Record<string, string> = {};
-  if (!request.firstName?.trim()) {
-    errors['firstName'] = 'First name is required';
-  } else if (request.firstName.trim().length > 100) {
-    errors['firstName'] = 'First name must be at most 100 characters';
-  }
-  if (!request.lastName?.trim()) {
-    errors['lastName'] = 'Last name is required';
-  } else if (request.lastName.trim().length > 100) {
-    errors['lastName'] = 'Last name must be at most 100 characters';
-  }
-  if (!request.email?.trim()) {
-    errors['email'] = 'Email is required';
-  } else if (!EMAIL_PATTERN.test(request.email.trim()) || request.email.trim().length > 255) {
-    errors['email'] = 'Email must be a valid address';
-  }
-  if (request.phone && request.phone.trim() && !PHONE_PATTERN.test(request.phone.trim())) {
-    errors['phone'] = 'Phone must be 7-32 digits and may include +, spaces or hyphens';
-  }
-  return Object.keys(errors).length > 0 ? errors : null;
 }

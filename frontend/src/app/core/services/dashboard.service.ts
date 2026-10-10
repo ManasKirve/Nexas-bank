@@ -1,30 +1,20 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, of } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 import { DashboardSummary } from '../../shared/models/dashboard.model';
-import { DemoRepositoryService } from './demo-repository.service';
 
 /**
- * Live aggregate counts for the dashboard, computed from the local demo store
- * instead of `GET /api/v1/dashboard/summary`.
+ * Dashboard aggregates API client (`GET /api/v1/dashboard/summary`).
  *
- * The contract still returns `DashboardSummary | null` so the component's
- * existing "no data yet" state keeps working; `null` is now only possible if
- * the dataset is genuinely empty.
+ * Every figure comes from the database; the UI never hardcodes banking numbers.
  */
 @Injectable({ providedIn: 'root' })
 export class DashboardService {
-  private readonly repo = inject(DemoRepositoryService);
+  private readonly http = inject(HttpClient);
+  private readonly base = environment.apiBaseUrl;
 
-  getSummary(): Observable<DashboardSummary | null> {
-    const accounts = this.repo.accounts();
-    if (accounts.length === 0) {
-      return of(null);
-    }
-    return of({
-      totalCustomers: this.repo.customers().length,
-      totalAccounts: accounts.length,
-      activeAccounts: accounts.filter((a) => a.status === 'ACTIVE').length,
-      frozenAccounts: accounts.filter((a) => a.status === 'FROZEN').length,
-    });
+  getSummary(): Observable<DashboardSummary> {
+    return this.http.get<DashboardSummary>(`${this.base}/api/v1/dashboard/summary`);
   }
 }

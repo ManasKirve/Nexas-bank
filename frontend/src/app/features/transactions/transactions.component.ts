@@ -7,12 +7,10 @@ import { Transaction, TransactionStatus } from '../../shared/models/transaction.
 type TypeFilter = 'ALL' | 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER';
 
 /**
- * Transaction history for the acting demo customer, newest first.
+ * Transaction history for the authenticated customer, newest first.
  *
- * This replaces the two hard-coded `TXN-1001` / `TXN-1002` rows the Docker
- * build shipped as a Phase 1 placeholder. The ledger is the real one in
- * LocalStorage, so deposits, withdrawals and both transfer legs all appear
- * here after a refresh.
+ * The ledger is served by the backend (`/api/v1/accounts/me/transactions`), so
+ * deposits, withdrawals and both transfer legs all appear after a refresh.
  */
 @Component({
   selector: 'app-transactions',
@@ -23,7 +21,7 @@ type TypeFilter = 'ALL' | 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER';
       <header class="page-head">
         <div>
           <h1>Transactions</h1>
-          <p class="muted">Immutable ledger for the demo customer selected in Admin.</p>
+          <p class="muted">Immutable ledger for your accounts.</p>
         </div>
         <span class="count-pill">{{ rows().length }} shown</span>
       </header>
